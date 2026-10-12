@@ -9,12 +9,31 @@ const configPath = resolve(process.env.EDM_CONFIG ?? join(appDir, 'config.json')
 const development = !process.argv.includes('--prod');
 
 const hub = new Hub({ configPath });
-await hub.start();
+try {
+  await hub.start();
+} catch (err) {
+  console.error(`[启动失败] ${(err as Error).message}`);
+  process.exit(1);
+}
 
 const oneDriveWarning = await checkNodeModulesSync(appDir);
 if (oneDriveWarning) console.warn(`[onedrive] ${oneDriveWarning}`);
 
-const server = createServer({ hub, port: hub.config.current.port, index, development });
+const port = hub.config.current.port;
+let server: ReturnType<typeof createServer>;
+try {
+  server = createServer({ hub, port, index, development });
+} catch (err) {
+  const { code, message } = err as NodeJS.ErrnoException;
+  const inUse = code === 'EADDRINUSE' || /in use/i.test(message);
+  console.error(
+    inUse
+      ? `[启动失败] 端口 ${port} 已被占用：请修改 config.json 的 port，或关闭占用该端口的程序`
+      : `[启动失败] ${message}`,
+  );
+  hub.stop();
+  process.exit(1);
+}
 const projects = hub.listMeta();
 console.log(`工程决策中心：http://127.0.0.1:${server.port}  （${projects.length} 个项目，配置 ${configPath}）`);
 
