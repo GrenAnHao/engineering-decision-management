@@ -10,6 +10,8 @@ const FONTS = [
   { file: 'JetBrainsMono-Italic-latin.woff2', family: 'JetBrains+Mono:ital,wght@1,100..800' },
 ];
 
+const FETCH_TIMEOUT_MS = 15_000;
+
 // 需要现代浏览器 UA，Google Fonts 才会返回 woff2
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
@@ -22,10 +24,18 @@ async function main(): Promise<void> {
   const outDir = join(import.meta.dir, '..', 'src', 'client', 'assets', 'fonts');
   await mkdir(outDir, { recursive: true });
   for (const font of FONTS) {
-    const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${font.family}&display=swap`, { headers: { 'User-Agent': UA } })).text();
+    const cssRes = await fetch(`https://fonts.googleapis.com/css2?family=${font.family}&display=swap`, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!cssRes.ok) throw new Error(`${font.file} 下载失败：HTTP ${cssRes.status} ${cssRes.url}`);
+    const css = await cssRes.text();
     const url = latinWoff2Url(css);
     if (!url) throw new Error(`未在 CSS 中找到 latin 子集：${font.family}`);
-    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+    const fontRes = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!fontRes.ok) throw new Error(`${font.file} 下载失败：HTTP ${fontRes.status} ${fontRes.url}`);
+    const bytes = new Uint8Array(await fontRes.arrayBuffer());
+    if (new TextDecoder().decode(bytes.slice(0, 4)) !== 'wOF2') throw new Error(`${font.file} 不是有效的 woff2`);
     await writeFile(join(outDir, font.file), bytes);
     console.log(`${font.file}  ${(bytes.length / 1024).toFixed(1)} KB`);
   }

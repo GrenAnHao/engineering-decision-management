@@ -15,7 +15,7 @@ export function createServer(opts: ServerOptions) {
   return Bun.serve({
     hostname: '127.0.0.1',
     port: opts.port,
-    // Windows 上 Bun 默认允许多个进程绑定同一端口，会让两个实例静默分流请求
+    // Windows 上 Bun 在 development: false 时默认允许多个进程绑定同一端口（生产模式会静默分流请求），显式关闭
     reusePort: false,
     development: opts.development ? { hmr: true, console: true } : false,
     routes: {

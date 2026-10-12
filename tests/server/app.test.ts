@@ -7,7 +7,7 @@ import { makeTempDir } from '../helpers/fixture';
 let cleanup = () => {};
 afterEach(() => cleanup());
 
-test('端口已被占用时 createServer 抛 EADDRINUSE（不允许重复绑定）', async () => {
+test('端口已被占用时 createServer 抛 EADDRINUSE（生产模式 development: false）', async () => {
   const tmp = makeTempDir();
   const hub = new Hub({ configPath: join(tmp.dir, 'config.json'), heartbeatMs: 60_000 });
   const first = createServer({ hub, port: 0 });
