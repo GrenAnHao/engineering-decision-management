@@ -45,22 +45,33 @@ export function SearchBox({ notes, inCount, query, onQueryChange, onOpenNote, on
     setOpen(false);
   };
 
+  useEffect(() => {
+    boxRef.current?.querySelector('.popover-item.selected')?.scrollIntoView({ block: 'nearest' });
+  }, [selected, open]);
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return; // 输入法组合中（拼音上屏、翻候选）不当作快捷键
+    const key = e.key;
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
       e.preventDefault();
-      if (!top.length) return;
-      const step = e.key === 'ArrowDown' ? 1 : -1;
-      setSelected((i) => (i + step + top.length) % top.length);
-    } else if (e.key === 'Enter') {
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      const n = top.length;
+      if (!n) return;
+      setSelected((i) => (key === 'ArrowDown' ? (i + 1) % n : i <= 0 ? n - 1 : i - 1));
+    } else if (key === 'Enter') {
       e.preventDefault();
-      const hit = top[selected];
+      const hit = open ? top[selected] : undefined;
       if (hit) pick(hit.id);
       else {
         onShowAll();
         setOpen(false);
       }
-    } else if (e.key === 'Escape') {
+    } else if (key === 'Escape') {
       setOpen(false);
+      setSelected(-1);
     }
   };
 

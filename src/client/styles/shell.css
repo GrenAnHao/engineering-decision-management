@@ -20,8 +20,11 @@
 
 .rail-item {
   position: relative; border: 1px solid transparent; border-radius: 6px; padding: 8px 9px; margin-bottom: 3px;
-  cursor: pointer; transition: background .15s;
+  transition: background .15s;
 }
+.rail-main { display: block; width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.rail-main:focus-visible { outline: 2px solid var(--brand-blue); outline-offset: 2px; border-radius: 4px; }
+.rail-meta { display: block; }
 .rail-item:hover { background: rgba(241, 245, 249, 0.8); }
 .rail-item.active { background: #EFF6FF; border-color: #BFDBFE; box-shadow: inset 2px 0 0 var(--brand-blue); }
 .rail-item.unhealthy { opacity: .55; }
@@ -42,8 +45,8 @@
 .rail-tag.manual { color: #475569; background: #F1F5F9; border-color: var(--border-normal); }
 
 .rail-actions { position: absolute; top: 6px; right: 6px; display: none; gap: 2px; background: inherit; }
-.rail-item:hover .rail-actions { display: flex; }
-.rail-item:hover .rail-live { visibility: hidden; }
+.rail-item:hover .rail-actions, .rail-item:focus-within .rail-actions { display: flex; }
+.rail-item:hover .rail-live, .rail-item:focus-within .rail-live { visibility: hidden; }
 .rail-action {
   border: 1px solid var(--border-normal); background: #FFFFFF; color: var(--text-secondary);
   border-radius: 3px; font-size: 10px; line-height: 1; padding: 3px 4px; cursor: pointer;

@@ -24,24 +24,31 @@ function RailItem({ project, active, actions }: { project: ProjectMeta; active: 
   };
   const classes = ['rail-item', active ? 'active' : '', project.healthy ? '' : 'unhealthy'].filter(Boolean).join(' ');
   return (
-    <div className={classes} onClick={() => actions.onSelect(project.id)} title={project.path}>
-      <div className="rail-top">
-        <span className="rail-dot" style={{ background: projectColor(project.order) }} />
-        <span className="rail-name">{project.displayName}</span>
-        {project.healthy && project.watchMode === 'live' && <span className="rail-live" title="实时监听中" />}
-      </div>
-      <div className="rail-meta">
-        {project.count} 条 · {relativeTime(project.lastChangeAt)}
-      </div>
-      {project.count > 0 && (
-        <div className="rail-bar">
-          {LIFECYCLES.filter((l) => project.counts[l] > 0).map((l) => (
-            <i key={l} style={{ background: LIFECYCLE_COLORS[l], flexGrow: project.counts[l] }} />
-          ))}
-        </div>
-      )}
-      {!project.healthy && <span className="rail-tag">路径失效</span>}
-      {project.healthy && project.watchMode === 'manual' && <span className="rail-tag manual">手动刷新</span>}
+    <div className={classes} title={project.path}>
+      <button
+        type="button"
+        className="rail-main"
+        aria-current={active ? 'true' : undefined}
+        onClick={() => actions.onSelect(project.id)}
+      >
+        <span className="rail-top">
+          <span className="rail-dot" style={{ background: projectColor(project.order) }} />
+          <span className="rail-name">{project.displayName}</span>
+          {project.healthy && project.watchMode === 'live' && <span className="rail-live" title="实时监听中" />}
+        </span>
+        <span className="rail-meta">
+          {project.count} 条 · {relativeTime(project.lastChangeAt)}
+        </span>
+        {project.count > 0 && (
+          <span className="rail-bar">
+            {LIFECYCLES.filter((l) => project.counts[l] > 0).map((l) => (
+              <i key={l} style={{ background: LIFECYCLE_COLORS[l], flexGrow: project.counts[l] }} />
+            ))}
+          </span>
+        )}
+        {!project.healthy && <span className="rail-tag">路径失效</span>}
+        {project.healthy && project.watchMode === 'manual' && <span className="rail-tag manual">手动刷新</span>}
+      </button>
       <div className="rail-actions">
         {project.watchMode === 'manual' && (
           <button type="button" className="rail-action" title="重新扫描" onClick={stop(() => actions.onRescan(project))}>
