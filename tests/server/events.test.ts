@@ -55,3 +55,17 @@ test('客户端取消后从列表移除', async () => {
   await reader.cancel();
   expect(hub.size).toBe(0);
 });
+
+test('不读取的慢客户端积压超过阈值后被断开', () => {
+  hub = new Broadcaster(60_000);
+  hub.connect();
+  for (let i = 0; i < 200; i += 1) hub.broadcast('project-error', { id: 'Pi', reason: String(i) });
+  expect(hub.size).toBe(0);
+});
+
+test('close 之后 connect 返回 503', () => {
+  hub = new Broadcaster(60_000);
+  hub.close();
+  expect(hub.connect().status).toBe(503);
+  expect(hub.size).toBe(0);
+});
