@@ -1,0 +1,13 @@
+node_modules/
+.superpowers/
+
+# Bun
+bun.lockb
+
+# 编辑器
+.vscode/
+.idea/
+
+# 系统
+Thumbs.db
+Desktop.ini
