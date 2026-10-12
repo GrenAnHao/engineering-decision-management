@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { checkNodeModulesSync } from '../../src/server/onedrive';
 import { makeTempDir } from '../helpers/fixture';
 
-let cleanup = () => {};
-afterEach(() => cleanup());
+const cleanups: (() => void)[] = [];
+afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
 
 function setup(): { oneDrive: string; app: string; outside: string } {
   const tmp = makeTempDir();
-  cleanup = tmp.cleanup;
+  cleanups.push(tmp.cleanup);
   const oneDrive = join(tmp.dir, 'OneDrive');
   const app = join(oneDrive, 'Projects', 'edm');
   const outside = join(tmp.dir, 'outside-node_modules');
