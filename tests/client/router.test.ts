@@ -47,6 +47,11 @@ describe('router', () => {
     expect(normalizeRoute(parseHash(''), [], [])).toBeNull();
     expect(normalizeRoute(parseHash(''), ['Pi'], ['Pi'])).toEqual({ projectId: 'Pi', view: 'baseline', note: null });
   });
+
+  test('空的 #note= 不产生笔记；未知项目回落时丢弃笔记', () => {
+    expect(parseHash('#note=').note).toBeNull();
+    expect(normalizeRoute(parseHash('#Nope/timeline/note=x'), ['Pi'], ['Pi'])).toEqual({ projectId: 'Pi', view: 'timeline', note: null });
+  });
 });
 
 describe('format', () => {

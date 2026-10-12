@@ -27,7 +27,7 @@ function decode(value: string): string {
 export function parseHash(hash: string): ParsedHash {
   const body = hash.replace(/^#/, '');
   if (!body) return { projectId: null, view: null, note: null };
-  if (body.startsWith('note=')) return { projectId: null, view: null, note: decode(body.slice(5)) };
+  if (body.startsWith('note=')) return { projectId: null, view: null, note: decode(body.slice(5)) || null };
   const [project = '', view = '', ...rest] = body.split('/');
   const tail = rest.join('/');
   return {
@@ -49,7 +49,8 @@ export function normalizeRoute(parsed: ParsedHash, knownIds: readonly string[], 
   }
   const id = projectId && knownIds.includes(projectId) ? projectId : (fallbackIds[0] ?? knownIds[0]);
   if (!id) return null;
-  return { projectId: id, view: isView(view) ? view : 'baseline', note: parsed.note };
+  const fellBack = !!projectId && !knownIds.includes(projectId);
+  return { projectId: id, view: isView(view) ? view : 'baseline', note: fellBack ? null : parsed.note };
 }
 
 export function formatHash(route: Route): string {
