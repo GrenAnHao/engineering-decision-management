@@ -38,3 +38,25 @@ test('应用不在 OneDrive 内或尚未安装依赖时不提示', async () => {
   const fresh = setup();
   expect(await checkNodeModulesSync(fresh.app, { OneDrive: fresh.oneDrive })).toBeNull();
 });
+
+test('前缀相同的兄弟目录（OneDrive2）不算在 OneDrive 内', async () => {
+  const { oneDrive } = setup();
+  const sibling = join(oneDrive + '2', 'edm');
+  mkdirSync(join(sibling, 'node_modules'), { recursive: true });
+  expect(await checkNodeModulesSync(sibling, { OneDrive: oneDrive })).toBeNull();
+});
+
+test('OneDriveConsumer / OneDriveCommercial 同样生效，应用目录等于根目录也算在内', async () => {
+  const { oneDrive, app } = setup();
+  mkdirSync(join(app, 'node_modules'));
+  expect(await checkNodeModulesSync(app, { OneDriveConsumer: oneDrive })).not.toBeNull();
+  expect(await checkNodeModulesSync(app, { OneDriveCommercial: oneDrive })).not.toBeNull();
+  mkdirSync(join(oneDrive, 'node_modules'));
+  expect(await checkNodeModulesSync(oneDrive, { OneDrive: oneDrive })).not.toBeNull();
+});
+
+test.if(process.platform === 'win32')('Windows 下路径比较不区分大小写', async () => {
+  const { oneDrive, app } = setup();
+  mkdirSync(join(app, 'node_modules'));
+  expect(await checkNodeModulesSync(app, { OneDrive: oneDrive.toUpperCase() })).not.toBeNull();
+});
