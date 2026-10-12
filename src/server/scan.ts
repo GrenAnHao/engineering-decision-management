@@ -44,26 +44,35 @@ export async function listNoteFiles(root: string): Promise<Map<string, string>> 
   return new Map([...found].map(([id, v]) => [id, v.abs]));
 }
 
-/** 日期倒序，同日期按 id 升序；无日期的排最后 */
-export function compareNotes(a: NoteDoc, b: NoteDoc): number {
-  return b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
+/** 码点序比较，结果与运行时 / 区域设置无关 */
+function byCodePoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** 日期倒序，同日期按 id 升序；无日期的排最后 */
+export function compareNotes(a: NoteDoc, b: NoteDoc): number {
+  return byCodePoint(b.date, a.date) || byCodePoint(a.id, b.id);
+}
+
+export type ReadNote = (absPath: string) => Promise<string>;
+
+const readUtf8: ReadNote = (absPath) => readFile(absPath, 'utf8');
+
 /** 全量扫描一个 notes 根：读盘 → 解析 → 解析链接 → 排序 */
-export async function scanNotes(root: string): Promise<{ notes: NoteDoc[]; scanMs: number }> {
+export async function scanNotes(root: string, read: ReadNote = readUtf8): Promise<{ notes: NoteDoc[]; scanMs: number }> {
   const started = performance.now();
   const files = await listNoteFiles(root);
   const parsed: ParsedNote[] = [];
   await Promise.all(
     [...files].map(async ([id, abs]) => {
       try {
-        parsed.push(parseNote(await readFile(abs, 'utf8'), id));
+        parsed.push(parseNote(await read(abs), id));
       } catch (err) {
         console.warn(`[scan] 跳过 ${abs}: ${(err as Error).message}`);
       }
     }),
   );
-  parsed.sort((a, b) => a.id.localeCompare(b.id));
+  parsed.sort((a, b) => byCodePoint(a.id, b.id));
   const index = buildLinkIndex(parsed.map((p) => p.id));
   const notes: NoteDoc[] = parsed.map(({ rawLinks, ...rest }) => ({
     ...rest,

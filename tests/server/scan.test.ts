@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { listNoteFiles, notesDir, scanNotes } from '../../src/server/scan';
 import { makeProject, makeTempDir, note } from '../helpers/fixture';
 
@@ -57,5 +58,33 @@ describe('scanNotes', () => {
     ]);
     expect(notes[0]!.links.map((l) => l.kind)).toEqual(['external', 'unresolved']);
     expect(scanMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('单篇读取失败只告警并跳过，其余照常返回', async () => {
+    const root = setup({
+      'implemented/feature/2026-01-01-ok.md': note('ok'),
+      'implemented/feature/2026-01-02-bad.md': note('bad'),
+    });
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const { notes } = await scanNotes(root, async (abs) => {
+      if (abs.endsWith('2026-01-02-bad.md')) throw new Error('EACCES');
+      return readFileSync(abs, 'utf8');
+    });
+    expect(notes.map((n) => n.slug)).toEqual(['2026-01-01-ok']);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  test('slug 冲突时按 id 码点序先到者胜出', async () => {
+    const root = setup({
+      'implemented/feature/2026-01-01-dup.md': note('impl'),
+      'proposed/feature/2026-01-01-dup.md': note('prop'),
+      'rejected/feature/2026-01-02-ref.md': note('ref', 'rejected — x', '## Decision\n\n见 [dup](../../archived/x/2026-01-01-dup.md)\n'),
+    });
+    const { notes } = await scanNotes(root);
+    const ref = notes.find((n) => n.slug === '2026-01-02-ref')!;
+    expect(ref.links).toEqual([
+      { kind: 'resolved', targetId: 'implemented/feature/2026-01-01-dup.md', rawHref: '../../archived/x/2026-01-01-dup.md', anchor: '' },
+    ]);
   });
 });
