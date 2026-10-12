@@ -20,7 +20,12 @@ export function watchNotes(dir: string, opts: WatchOptions): WatchHandle {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      if (!closed) opts.onChange();
+      if (closed) return;
+      try {
+        opts.onChange();
+      } catch (err) {
+        opts.onError(err as Error);
+      }
     }, opts.debounceMs);
   });
   watcher.on('error', (err: Error) => {

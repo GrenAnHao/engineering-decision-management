@@ -30,18 +30,38 @@ test('连续写盘在 debounce 窗口内合并为一次回调，含新建子目�
   expect(calls).toBe(1);
 });
 
-test('close 之后不再回调', async () => {
+test('close 之后不再回调（计时器已在等待中）', async () => {
   const tmp = makeTempDir();
   cleanup = tmp.cleanup;
   let calls = 0;
-  handle = watchNotes(tmp.dir, { debounceMs: 50, onChange: () => (calls += 1), onError: () => {} });
+  handle = watchNotes(tmp.dir, { debounceMs: 300, onChange: () => (calls += 1), onError: () => {} });
   await sleep(100);
   writeFileSync(join(tmp.dir, 'x.md'), 'x');
+  await sleep(80);
   handle.close();
-  await sleep(300);
+  await sleep(500);
   expect(calls).toBe(0);
 });
 
+test('onChange 抛错转交 onError，不抛出到进程', async () => {
+  const tmp = makeTempDir();
+  cleanup = tmp.cleanup;
+  const errors: Error[] = [];
+  handle = watchNotes(tmp.dir, {
+    debounceMs: 50,
+    onChange: () => {
+      throw new Error('rescan failed');
+    },
+    onError: (err) => errors.push(err),
+  });
+  await sleep(100);
+  writeFileSync(join(tmp.dir, 'y.md'), 'y');
+  await sleep(400);
+  expect(errors.map((e) => e.message)).toEqual(['rescan failed']);
+});
+
 test('目录不存在时同步抛错', () => {
-  expect(() => watchNotes('Z:/missing/notes', { debounceMs: 10, onChange: () => {}, onError: () => {} })).toThrow();
+  const tmp = makeTempDir();
+  cleanup = tmp.cleanup;
+  expect(() => watchNotes(join(tmp.dir, 'missing'), { debounceMs: 10, onChange: () => {}, onError: () => {} })).toThrow();
 });
