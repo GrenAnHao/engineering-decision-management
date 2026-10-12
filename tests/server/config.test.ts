@@ -43,7 +43,7 @@ describe('loadConfig', () => {
 
   test('带 BOM 的 UTF-8 文件正常解析', async () => {
     const path = tempConfigPath();
-    writeFileSync(path, '﻿' + JSON.stringify({ port: 6001 }));
+    writeFileSync(path, '\uFEFF' + JSON.stringify({ port: 6001 }));
     const { config, error } = await loadConfig(path);
     expect(error).toBeNull();
     expect(config.port).toBe(6001);

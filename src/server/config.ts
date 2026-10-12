@@ -75,7 +75,7 @@ export async function loadConfig(path: string): Promise<LoadResult> {
   }
   try {
     // 去掉记事本等编辑器保存的 UTF-8 BOM
-    return { config: normalizeConfig(JSON.parse(text.replace(/^﻿/, '')), defaults), error: null };
+    return { config: normalizeConfig(JSON.parse(text.replace(/^\uFEFF/, '')), defaults), error: null };
   } catch (err) {
     return { config: defaults, error: `config.json 解析失败，已使用内置默认值：${(err as Error).message}` };
   }
