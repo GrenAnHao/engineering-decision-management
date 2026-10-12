@@ -15,6 +15,17 @@ describe('parseInline', () => {
   test('代码里的星号不当粗体', () => {
     expect(parseInline('`**x**`')).toEqual([{ t: 'code', v: '**x**' }]);
   });
+
+  test('反斜杠转义：粗体内的 \\* 是字面星号', () => {
+    expect(parseInline('**SAFETY_\\***')).toEqual([{ t: 'strong', c: [{ t: 'text', v: 'SAFETY_*' }] }]);
+    expect(parseInline('a \\[b\\] c')).toEqual([{ t: 'text', v: 'a [b] c' }]);
+  });
+
+  test('病态超长单行不会卡死', () => {
+    const started = performance.now();
+    parseInline('[a'.repeat(40_000));
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe('parseBlocks', () => {
@@ -23,7 +34,50 @@ describe('parseBlocks', () => {
     expect(blocks.map((b) => b.t)).toEqual(['p', 'h', 'ul', 'ol', 'quote']);
     expect(blocks[0]).toEqual({ t: 'p', c: [{ t: 'text', v: '第一行\n第二行' }] });
     expect(blocks[1]).toMatchObject({ t: 'h', level: 3 });
-    expect(blocks[2]).toEqual({ t: 'ul', items: [[{ t: 'text', v: 'a\n续行' }], [{ t: 'text', v: 'b' }]] });
+    expect(blocks[2]).toEqual({
+      t: 'ul',
+      items: [
+        { c: [{ t: 'text', v: 'a\n续行' }], children: [] },
+        { c: [{ t: 'text', v: 'b' }], children: [] },
+      ],
+    });
+  });
+
+  test('嵌套列表保留层级', () => {
+    expect(parseBlocks('- 父\n  - 子一\n  - 子二\n- 兄')).toEqual([
+      {
+        t: 'ul',
+        items: [
+          {
+            c: [{ t: 'text', v: '父' }],
+            children: [
+              {
+                t: 'ul',
+                items: [
+                  { c: [{ t: 'text', v: '子一' }], children: [] },
+                  { c: [{ t: 'text', v: '子二' }], children: [] },
+                ],
+              },
+            ],
+          },
+          { c: [{ t: 'text', v: '兄' }], children: [] },
+        ],
+      },
+    ]);
+  });
+
+  test('表格：表头 + 数据行', () => {
+    expect(parseBlocks('| 列 A | 列 B |\n| --- | :---: |\n| 1 | `x` |\n| 2 | y |\n\n后')).toEqual([
+      {
+        t: 'table',
+        head: [[{ t: 'text', v: '列 A' }], [{ t: 'text', v: '列 B' }]],
+        rows: [
+          [[{ t: 'text', v: '1' }], [{ t: 'code', v: 'x' }]],
+          [[{ t: 'text', v: '2' }], [{ t: 'text', v: 'y' }]],
+        ],
+      },
+      { t: 'p', c: [{ t: 'text', v: '后' }] },
+    ]);
   });
 
   test('围栏代码块原样保留，内部不解析', () => {
@@ -32,6 +86,10 @@ describe('parseBlocks', () => {
       { t: 'pre', lang: 'ts', v: '## 不是标题\n- 不是列表' },
       { t: 'p', c: [{ t: 'text', v: '后' }] },
     ]);
+  });
+
+  test('info 含反引号的行不是围栏', () => {
+    expect(parseBlocks('```x``` 是行内\n\n后').map((b) => b.t)).toEqual(['p', 'p']);
   });
 
   test('未闭合围栏吞到结尾', () => {
