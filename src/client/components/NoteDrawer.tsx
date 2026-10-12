@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NoteDoc, NoteSummary } from '../../shared/types';
 import { api } from '../api';
 import { cites, findNote, type InCount } from '../derive';
@@ -25,22 +25,31 @@ const QUADS = [
 ] as const;
 
 function CopyAnchor({ id }: { id: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anchor = `// Note: 见 .agents/notes/${id}`;
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
   const copy = async () => {
+    if (timer.current) clearTimeout(timer.current);
     try {
       await navigator.clipboard.writeText(anchor);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setState('copied');
     } catch (err) {
       console.error('[drawer] 复制失败', err);
+      setState('failed');
     }
+    timer.current = setTimeout(() => setState('idle'), 1500);
   };
   return (
     <div className="anchor-terminal">
       <span className="anchor-code">{anchor}</span>
       <button type="button" className="btn-anchor-copy" onClick={copy}>
-        {copied ? '已复制' : '复制反向代码注释'}
+        {state === 'copied' ? '已复制' : state === 'failed' ? '复制失败' : '复制反向代码注释'}
       </button>
     </div>
   );
@@ -51,7 +60,7 @@ function DrawerBody({ doc, notes, inCount, onOpenNote }: { doc: NoteDoc; notes: 
   return (
     <>
       <CopyAnchor id={doc.id} />
-      <h1 className="console-headline">{doc.title}</h1>
+      <h1 className="console-headline" id="note-drawer-title">{doc.title}</h1>
       <div className="console-timestamp">
         <span>{doc.date || '无日期'}</span>
         <span>·</span>
@@ -98,8 +107,13 @@ function DrawerBody({ doc, notes, inCount, onOpenNote }: { doc: NoteDoc; notes: 
  * 而是浮出「此笔记已更新 · 点击刷新」，由用户决定何时刷新。父组件以 noteKey 作 key，换篇即重置。
  */
 export function NoteDrawer({ projectId, noteKey, notes, inCount, onClose, onOpenNote }: NoteDrawerProps) {
-  const summary = notes ? findNote(notes, noteKey) : undefined;
-  const noteId = summary?.id ?? null;
+  // 锁定首次解析出的笔记 id：同 id 重现或 slug 重名时不会静默换成别的正文
+  const lockedId = useRef<string | null>(null);
+  const resolved = notes ? findNote(notes, noteKey) : undefined;
+  if (lockedId.current === null && resolved) lockedId.current = resolved.id;
+  const noteId = lockedId.current;
+  const summary = noteId && notes ? notes.find((n) => n.id === noteId) : undefined;
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [snapshot, setSnapshot] = useState<NoteDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
@@ -122,9 +136,18 @@ export function NoteDrawer({ projectId, noteKey, notes, inCount, onClose, onOpen
     };
   }, [projectId, noteId, reloadTick]);
 
+  // 对话框焦点管理：打开时聚焦关闭按钮，卸载时还给打开前的元素
+  useEffect(() => {
+    const prev = document.activeElement;
+    closeRef.current?.focus();
+    return () => (prev as HTMLElement | null)?.focus?.();
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // 搜索框已用 Esc 关了自己的浮层（defaultPrevented）或正在输入法组合时，不关抽屉
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -132,16 +155,16 @@ export function NoteDrawer({ projectId, noteKey, notes, inCount, onClose, onOpen
 
   const stale = !!(summary && snapshot && summary.hash !== snapshot.hash);
   const deleted = !!(notes && !summary && snapshot);
-  const missing = !!(notes && !summary && !snapshot);
+  const missing = !!(notes && !noteId && !snapshot);
 
   return (
     <>
       <div className="drawer-curtain" onClick={onClose} />
-      <aside className="drawer-console">
+      <aside className="drawer-console" role="dialog" aria-modal="true" aria-labelledby="note-drawer-title">
         <div className="console-header">
           {snapshot && <StatusBadge lifecycle={snapshot.lifecycle} />}
           {snapshot && <ClassBadge cls={snapshot.cls} />}
-          <button type="button" className="console-exit" title="退出 (Esc)" onClick={onClose}>
+          <button type="button" className="console-exit" ref={closeRef} title="退出 (Esc)" onClick={onClose}>
             ✕
           </button>
         </div>
@@ -159,7 +182,14 @@ export function NoteDrawer({ projectId, noteKey, notes, inCount, onClose, onOpen
               <span>此笔记已被删除或移动，以下为删除前的内容</span>
             </div>
           )}
-          {error && <div className="update-banner deleted">加载失败：{error}</div>}
+          {error && (
+            <div className="update-banner deleted">
+              <span>加载失败：{error}</span>
+              <button type="button" onClick={() => setReloadTick((t) => t + 1)}>
+                重试
+              </button>
+            </div>
+          )}
           {missing && <div className="empty-hint">// 未找到笔记：{noteKey}</div>}
           {!snapshot && !missing && !error && <div className="skeleton-block tall" />}
           {snapshot && <DrawerBody doc={snapshot} notes={notes ?? []} inCount={inCount} onOpenNote={onOpenNote} />}

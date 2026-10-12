@@ -37,6 +37,9 @@ export function App() {
     if (route && formatHash(route) !== location.hash) navigate(route);
   }, [route, navigate]);
 
+  // 切换项目（左栏点击或 hash 导航）时清空全局搜索词，避免旧词把新项目的清单过滤成空
+  useEffect(() => setQuery(''), [route?.projectId]);
+
   const project = hub.projects.find((p) => p.id === route?.projectId) ?? null;
   const version = (route ? hub.versions[route.projectId] ?? 0 : 0) + hub.epoch;
   const notesState = useProjectNotes(route?.projectId ?? null, version);
@@ -59,7 +62,8 @@ export function App() {
     onSelect: (id) => route && navigate({ projectId: id, view: route.view, note: null }),
     onAdd: () => {
       const path = window.prompt('输入项目的绝对路径（目录下需有 .agents/notes）');
-      if (path?.trim()) void runAction(() => api.addProject(path.trim()));
+      const cleaned = path?.trim().replace(/^"(.*)"$/, '$1'); // 资源管理器"复制为路径"会带引号
+      if (cleaned) void runAction(() => api.addProject(cleaned));
     },
     onRename: (p: ProjectMeta) => {
       const name = window.prompt('显示名（留空恢复为文件夹名）', p.displayName);

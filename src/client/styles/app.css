@@ -469,4 +469,4 @@ button.sync-beacon:hover { border-color: var(--brand-blue); color: #0F172A; box-
   text-align: center; padding: 40px;
 }
 
-[role='button']:focus-visible { outline: 2px solid var(--brand-blue); outline-offset: 2px; }
+[role='button']:focus-visible { outline: 2px solid var(--brand-blue); outline-offset: -2px; }

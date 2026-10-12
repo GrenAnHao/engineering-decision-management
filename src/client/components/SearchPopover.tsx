@@ -69,7 +69,8 @@ export function SearchBox({ notes, inCount, query, onQueryChange, onOpenNote, on
         onShowAll();
         setOpen(false);
       }
-    } else if (key === 'Escape') {
+    } else if (key === 'Escape' && open) {
+      e.preventDefault(); // 浮层打开时 Esc 只关浮层；已关闭时放行，让 Esc 继续去关抽屉
       setOpen(false);
       setSelected(-1);
     }
