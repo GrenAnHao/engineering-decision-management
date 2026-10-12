@@ -119,6 +119,16 @@ describe('parseNote Status 行', () => {
     const note = parseNote(`# Agent Note: t\n\nStatus: wip\n`, 'archived/process/2026-10-01-x.md');
     expect(note.lifecycle).toBe('archived');
   });
+
+  test('Status 词大小写不敏感', () => {
+    expect(parseNote(`# Agent Note: t\n\nStatus: Rejected — 原因\n`, 'implemented/a/x.md').lifecycle).toBe('rejected');
+  });
+
+  test('章节正文里的 Status 行不参与判定', () => {
+    const note = parseNote(`# Agent Note: t\n\n## Problem\n\nStatus: rejected — 示例\n`, 'proposed/a/x.md');
+    expect(note.lifecycle).toBe('proposed');
+    expect(note.verdict).toBe('');
+  });
 });
 
 describe('parseNote 元数据', () => {
@@ -182,6 +192,10 @@ c
     expect(masked.length).toBe(text.length);
     expect(masked.split('\n').length).toBe(text.split('\n').length);
     expect(masked).toBe('a\n   \n \n   \nb');
+  });
+
+  test('info string 含反引号的行不是围栏（行首内联代码）', () => {
+    expect(maskFences('```x``` 是内联\n## y')).toBe('```x``` 是内联\n## y');
   });
 
   test('~~~ 围栏与更长的 ``` 围栏也能识别', () => {

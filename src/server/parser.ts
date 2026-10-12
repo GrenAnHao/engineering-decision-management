@@ -17,10 +17,10 @@ const SECTION_ALIASES: Record<FixedKey, readonly string[]> = {
 const HEADING_RE = /^## +(.+?)[ \t]*$/gm;
 const TITLE_RE = /^# Agent Note[^:：\n]*[:：][ \t]*(.+?)[ \t]*$/m;
 const ANY_H1_RE = /^# +(.+?)[ \t]*$/m;
-const STATUS_RE = /^Status:[ \t]*([a-z-]+)[ \t]*(?:[—–-][ \t]*(.*?))?[ \t]*$/m;
+const STATUS_RE = /^Status:[ \t]*([A-Za-z-]+)[ \t]*(?:[—–-][ \t]*(.*?))?[ \t]*$/m;
 const LINK_RE = /\[[^\]\n]*\]\(([^)\s]+)(?:[ \t]+"[^"\n]*")?\)/g;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE_OPEN_RE = /^ {0,3}(?:(`{3,})[^`]*|(~{3,}).*)$/;
 const FENCE_CLOSE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 
 export function normalizeNewlines(text: string): string {
@@ -39,7 +39,7 @@ export function maskFences(text: string): string {
       if (fence === null) {
         const open = FENCE_OPEN_RE.exec(line);
         if (!open) return line;
-        fence = open[1]!;
+        fence = (open[1] ?? open[2])!;
         return ' '.repeat(line.length);
       }
       const close = FENCE_CLOSE_RE.exec(line);
@@ -106,8 +106,9 @@ export function parseNote(raw: string, id: string): ParsedNote {
 
   const title = TITLE_RE.exec(masked)?.[1] ?? ANY_H1_RE.exec(masked)?.[1] ?? slug;
 
-  const status = STATUS_RE.exec(masked);
-  const statusWord = status?.[1] ?? '';
+  const firstHeading = masked.search(/^## /m);
+  const status = STATUS_RE.exec(firstHeading === -1 ? masked : masked.slice(0, firstHeading));
+  const statusWord = status?.[1]?.toLowerCase() ?? '';
   const lifecycle: Lifecycle = isLifecycle(statusWord) ? statusWord : folderLifecycle;
   const verdict = status?.[2]?.trim() ?? '';
 
