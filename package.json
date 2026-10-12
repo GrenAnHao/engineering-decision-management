@@ -1,0 +1,23 @@
+{
+  "name": "engineering-decision-hub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server/main.ts",
+    "start": "bun src/server/main.ts --prod",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p .",
+    "fonts": "bun scripts/fetch-fonts.ts"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

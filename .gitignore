@@ -11,3 +11,6 @@ bun.lockb
 # 系统
 Thumbs.db
 Desktop.ini
+
+# 配置原子写的临时文件
+*.tmp

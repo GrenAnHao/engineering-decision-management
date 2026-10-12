@@ -1,0 +1,7 @@
+{
+  "port": 5173,
+  "scanRoots": ["D:\\OneDrive\\Project Files"],
+  "scanDepth": 2,
+  "projects": [],
+  "watch": { "debounceMs": 150, "rescanRootsMs": 60000 }
+}
