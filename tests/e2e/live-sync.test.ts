@@ -51,11 +51,12 @@ test('文件事件触发的扫描更新 lastChangeAt', async () => {
 });
 
 test('定期重扫扫描根发现新项目并广播 config-changed', async () => {
-  env = await startTestServer((root) => makeProject(root, 'First', {}));
+  env = await startTestServer((root) => makeProject(root, 'First', {}), {
+    watch: { debounceMs: 50, rescanRootsMs: 1000 },
+  });
   const reader = await openEvents(env.base);
   makeProject(env.root, 'Second', { 'implemented/feature/2026-01-01-b.md': note('b') });
-  await env.hub.refreshRoots();
-  const { data } = await waitForEvent(reader, (event) => event === 'config-changed');
+  const { data } = await waitForEvent(reader, (event) => event === 'config-changed', 4000);
   expect((data as { projects: { id: string }[] }).projects.map((p) => p.id).sort()).toEqual(['First', 'Second']);
   const config = (await (await fetch(`${env.base}/api/config`)).json()) as ConfigResponse;
   expect(config.projects.find((p) => p.id === 'Second')!.count).toBe(1);
