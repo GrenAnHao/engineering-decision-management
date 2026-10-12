@@ -1,4 +1,4 @@
-import type { NoteDoc, NoteSummary } from '../../shared/types';
+import type { LinkResult, NoteDoc, NoteSummary } from '../../shared/types';
 import { incoming } from '../derive';
 
 export function LineageChips({
@@ -11,7 +11,9 @@ export function LineageChips({
   onOpenNote: (noteId: string) => void;
 }) {
   const titleOf = (id: string) => notes.find((n) => n.id === id)?.title ?? id;
-  const outgoing = note.links.filter((l) => l.kind === 'resolved');
+  const outgoing = note.links
+    .filter((l): l is Extract<LinkResult, { kind: 'resolved' }> => l.kind === 'resolved')
+    .filter((l, i, all) => all.findIndex((x) => x.targetId === l.targetId) === i);
   const external = note.links.filter((l) => l.kind === 'external');
   const broken = note.links.filter((l) => l.kind === 'unresolved');
   const inbound = incoming(notes, note.id);

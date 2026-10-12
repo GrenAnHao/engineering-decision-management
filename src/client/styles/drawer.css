@@ -113,3 +113,4 @@
 .lineage-chip.external:hover { color: var(--text-tertiary); border-color: var(--border-normal); background: #F8FAFC; }
 .lineage-chip.broken { color: #991B1B; background: #FEF2F2; border-color: #FECACA; cursor: default; font-family: var(--font-mono); font-size: 11.5px; }
 .lineage-empty { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

@@ -16,7 +16,8 @@ function renderLink(href: string, children: ReactNode, key: number, ctx: LinkCon
   if (result?.kind === 'external') {
     return (
       <span key={key} className="md-link external" title={`↗ 外部引用：${href}`}>
-        {children} ↗
+        {children} <span aria-hidden="true">↗</span>
+        <span className="sr-only">（外部引用）</span>
       </span>
     );
   }
@@ -24,6 +25,7 @@ function renderLink(href: string, children: ReactNode, key: number, ctx: LinkCon
     return (
       <span key={key} className="md-link broken" title={`⚠ 断链：${href}`}>
         {children}
+        <span className="sr-only">（断链）</span>
       </span>
     );
   }
@@ -59,6 +61,7 @@ function renderBlock(block: Block, i: number, ctx: LinkContext): ReactNode {
     case 'p':
       return <p key={i}>{renderInline(block.c, ctx)}</p>;
     case 'h': {
+      // 抽屉里已有 h1 与章节标题，正文标题从 h3 起
       const Tag = `h${Math.min(Math.max(block.level, 3), 6)}` as 'h3' | 'h4' | 'h5' | 'h6';
       return <Tag key={i}>{renderInline(block.c, ctx)}</Tag>;
     }
