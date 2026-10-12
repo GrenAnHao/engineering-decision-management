@@ -1,4 +1,5 @@
 import type { Dispatch } from 'react';
+import { clickable } from '../a11y';
 import { LIFECYCLES, type Lifecycle, type NoteSummary } from '../../shared/types';
 import { ClassBadge, StatusBadge } from '../components/Badge';
 import { cites, classesOf, directory, type InCount, type SortMode } from '../derive';
@@ -17,7 +18,10 @@ export type DirectoryViewProps = {
 };
 
 export function DirectoryView({ notes, inCount, filters, dispatch, query, onClearQuery, onOpenNote }: DirectoryViewProps) {
-  const list = directory(notes, inCount, { status: filters.status, cls: filters.cls, sort: filters.sort, query });
+  const classes = classesOf(notes);
+  // 数据刷新后已选分类可能已不存在：回落为全部，避免下拉框空白而过滤仍生效
+  const cls = classes.includes(filters.cls) ? filters.cls : '';
+  const list = directory(notes, inCount, { status: filters.status, cls, sort: filters.sort, query });
   return (
     <section className="canvas-view">
       <div className="matrix-toolbar">
@@ -29,9 +33,9 @@ export function DirectoryView({ notes, inCount, filters, dispatch, query, onClea
             </option>
           ))}
         </select>
-        <select value={filters.cls} onChange={(e) => dispatch({ type: 'set', patch: { cls: e.target.value } })}>
+        <select value={cls} onChange={(e) => dispatch({ type: 'set', patch: { cls: e.target.value } })}>
           <option value="">分类：全部</option>
-          {classesOf(notes).map((c) => (
+          {classes.map((c) => (
             <option key={c} value={c}>
               分类：{classLabel(c)}
             </option>
@@ -75,7 +79,7 @@ export function DirectoryView({ notes, inCount, filters, dispatch, query, onClea
         </div>
         {list.length === 0 && <div className="empty-hint">// 没有匹配的决策记录</div>}
         {list.map((n, i) => (
-          <div key={n.id} className="matrix-row-cell" onClick={() => onOpenNote(n.id)}>
+          <div key={n.id} className="matrix-row-cell" {...clickable(() => onOpenNote(n.id))}>
             <span className="cell-index">#{String(i + 1).padStart(3, '0')}</span>
             <span>
               <ClassBadge cls={n.cls} />

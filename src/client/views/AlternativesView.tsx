@@ -1,5 +1,6 @@
 import type { Dispatch } from 'react';
 import type { NoteSummary } from '../../shared/types';
+import { clickable } from '../a11y';
 import { ClassBadge } from '../components/Badge';
 import { pitfalls } from '../derive';
 import type { FilterAction } from '../state/filters';
@@ -35,7 +36,7 @@ export function AlternativesView({ notes, query, dispatch, onOpenNote }: Alterna
         <div className="pitfalls-grid">
           {items.length === 0 && <div className="empty-hint" style={{ gridColumn: '1 / -1' }}>// 未检索到相关避坑记录</div>}
           {items.map((it) => (
-            <div key={it.key} className="pitfall-dossier" onClick={() => onOpenNote(it.noteId)}>
+            <div key={it.key} className="pitfall-dossier" {...clickable(() => onOpenNote(it.noteId))}>
               <div>
                 <div className="pitfall-head">
                   <ClassBadge cls={it.cls} />

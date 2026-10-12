@@ -1,4 +1,5 @@
 import type { NoteSummary } from '../../shared/types';
+import { clickable } from '../a11y';
 import { ClassBadge } from '../components/Badge';
 import { KpiRow } from '../components/KpiRow';
 import { chambers, cites, pillarAbstract, pillars, type InCount, type KpiTarget } from '../derive';
@@ -26,7 +27,7 @@ export function BaselineView({ notes, inCount, onOpenNote, onJump }: BaselineVie
         </div>
         <div className="pillars-vault">
           {pillars(notes, inCount).map((n) => (
-            <div key={n.id} className="pillar-specimen" onClick={() => onOpenNote(n.id)}>
+            <div key={n.id} className="pillar-specimen" {...clickable(() => onOpenNote(n.id))}>
               <div>
                 <div className="pillar-meta">
                   <ClassBadge cls={n.cls} />
@@ -62,7 +63,7 @@ export function BaselineView({ notes, inCount, onOpenNote, onJump }: BaselineVie
               <div className="chamber-stream">
                 {col.length === 0 && <div className="chamber-empty">// 暂无该类活跃决策</div>}
                 {col.map((n) => (
-                  <div key={n.id} className="specimen-row" onClick={() => onOpenNote(n.id)}>
+                  <div key={n.id} className="specimen-row" {...clickable(() => onOpenNote(n.id))}>
                     <div className="specimen-title">{n.title}</div>
                     <div className="specimen-info">
                       <span>{n.date || '—'}</span>

@@ -1,7 +1,8 @@
 import type { Dispatch } from 'react';
 import type { NoteSummary } from '../../shared/types';
 import { ClassBadge, StatusBadge } from '../components/Badge';
-import { timeline } from '../derive';
+import { clickable } from '../a11y';
+import { classesOf, timeline } from '../derive';
 import { plainText } from '../format';
 import { classLabel } from '../labels';
 import type { FilterAction, Filters } from '../state/filters';
@@ -14,7 +15,10 @@ export type TimelineViewProps = {
 };
 
 export function TimelineView({ notes, filters, dispatch, onOpenNote }: TimelineViewProps) {
-  const { timelineMonth: month, timelineClass: cls } = filters;
+  // 数据刷新后已选的月份 / 分类可能已不存在：回落为全部，避免选中项消失而过滤仍生效
+  const monthsAll = timeline(notes, '', '').months.map((m) => m.month);
+  const month = monthsAll.includes(filters.timelineMonth) ? filters.timelineMonth : '';
+  const cls = classesOf(notes).includes(filters.timelineClass) ? filters.timelineClass : '';
   const data = timeline(notes, month, cls);
   const slices = [month, cls ? classLabel(cls) : ''].filter(Boolean);
 
@@ -87,7 +91,7 @@ export function TimelineView({ notes, filters, dispatch, onOpenNote }: TimelineV
               </div>
               <div className="chrono-cards">
                 {g.notes.map((n) => (
-                  <div key={n.id} className="chrono-card" onClick={() => onOpenNote(n.id)}>
+                  <div key={n.id} className="chrono-card" {...clickable(() => onOpenNote(n.id))}>
                     <div className="chrono-pulse" />
                     <div className="chrono-meta-row">
                       <span className="chrono-date-badge">📅 {n.date}</span>

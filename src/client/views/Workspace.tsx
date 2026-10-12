@@ -18,13 +18,14 @@ export type WorkspaceProps = {
   onViewChange: (view: ViewId) => void;
   onOpenNote: (noteId: string) => void;
   onRescan: () => void;
+  onRetry: () => void;
 };
 
 /**
  * 单个项目的画布。父组件以项目 id 作 key：切项目时整个组件重建，筛选状态随之重置；
  * 切视图只换子视图，筛选保留。
  */
-export function Workspace({ project, data, error, view, query, onClearQuery, onViewChange, onOpenNote, onRescan }: WorkspaceProps) {
+export function Workspace({ project, data, error, view, query, onClearQuery, onViewChange, onOpenNote, onRescan, onRetry }: WorkspaceProps) {
   const [filters, dispatch] = useReducer(filtersReducer, INITIAL_FILTERS);
 
   if (!project.healthy) {
@@ -45,6 +46,9 @@ export function Workspace({ project, data, error, view, query, onClearQuery, onV
       <div className="state-panel">
         <h2>加载失败</h2>
         <p>{error}</p>
+        <button type="button" className="action-btn-primary" onClick={onRetry}>
+          重试
+        </button>
       </div>
     ) : (
       <>

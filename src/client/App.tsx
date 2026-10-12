@@ -122,6 +122,7 @@ export function App() {
                 onViewChange={(view) => go({ view })}
                 onOpenNote={openNote}
                 onRescan={() => rescan(project.id)}
+                onRetry={notesState.retry}
               />
             )}
           </main>
