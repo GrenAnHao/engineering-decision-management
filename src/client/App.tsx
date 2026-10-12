@@ -59,7 +59,11 @@ export function App() {
   const rescan = useCallback((id: string) => void runAction(() => api.rescan(id)), []);
 
   const actions: ProjectActions = {
-    onSelect: (id) => route && navigate({ projectId: id, view: route.view, note: null }),
+    onSelect: (id) => {
+      if (!route) return;
+      setQuery(''); // 同步清空，避免切项目第一帧仍用旧词渲染
+      navigate({ projectId: id, view: route.view, note: null });
+    },
     onAdd: () => {
       const path = window.prompt('输入项目的绝对路径（目录下需有 .agents/notes）');
       const cleaned = path?.trim().replace(/^"(.*)"$/, '$1'); // 资源管理器"复制为路径"会带引号

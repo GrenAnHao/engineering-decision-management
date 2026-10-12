@@ -43,6 +43,7 @@ export function SearchBox({ notes, inCount, query, onQueryChange, onOpenNote, on
   const pick = (noteId: string) => {
     onOpenNote(noteId);
     setOpen(false);
+    inputRef.current?.blur(); // 避免抽屉把输入框记作触发元素，关闭时焦点回到输入框又弹出浮层
   };
 
   useEffect(() => {
@@ -69,8 +70,8 @@ export function SearchBox({ notes, inCount, query, onQueryChange, onOpenNote, on
         onShowAll();
         setOpen(false);
       }
-    } else if (key === 'Escape' && open) {
-      e.preventDefault(); // 浮层打开时 Esc 只关浮层；已关闭时放行，让 Esc 继续去关抽屉
+    } else if (key === 'Escape' && open && query.trim()) {
+      e.preventDefault(); // 浮层可见时 Esc 只关浮层；不可见时放行，让 Esc 继续去关抽屉
       setOpen(false);
       setSelected(-1);
     }

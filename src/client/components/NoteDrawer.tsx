@@ -160,7 +160,7 @@ export function NoteDrawer({ projectId, noteKey, notes, inCount, onClose, onOpen
   return (
     <>
       <div className="drawer-curtain" onClick={onClose} />
-      <aside className="drawer-console" role="dialog" aria-modal="true" aria-labelledby="note-drawer-title">
+      <aside className="drawer-console" role="dialog" aria-modal="true" aria-label="笔记详情" aria-labelledby="note-drawer-title">
         <div className="console-header">
           {snapshot && <StatusBadge lifecycle={snapshot.lifecycle} />}
           {snapshot && <ClassBadge cls={snapshot.cls} />}
