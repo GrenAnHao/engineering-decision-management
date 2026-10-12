@@ -65,3 +65,18 @@ test('目录不存在时同步抛错', () => {
   cleanup = tmp.cleanup;
   expect(() => watchNotes(join(tmp.dir, 'missing'), { debounceMs: 10, onChange: () => {}, onError: () => {} })).toThrow();
 });
+
+test('事件持续不断时，最多等 maxWaitMs 也会触发一次', async () => {
+  const tmp = makeTempDir();
+  cleanup = tmp.cleanup;
+  let calls = 0;
+  handle = watchNotes(tmp.dir, { debounceMs: 200, maxWaitMs: 300, onChange: () => (calls += 1), onError: () => {} });
+  await sleep(100);
+  const deadline = Date.now() + 800;
+  let i = 0;
+  while (Date.now() < deadline) {
+    writeFileSync(join(tmp.dir, `s${i++ % 3}.md`), String(i));
+    await sleep(40);
+  }
+  expect(calls).toBeGreaterThanOrEqual(1);
+});

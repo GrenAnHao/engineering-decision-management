@@ -85,6 +85,18 @@ describe('项目管理接口', () => {
     expect(again.status).toBe(409);
   });
 
+  test('同一路径并发 POST 只成功一次，config 不出现重复条目', async () => {
+    const { base, configPath } = await start();
+    const outside = makeTempDir();
+    extraCleanup = outside.cleanup;
+    const path = makeProject(outside.dir, 'Gamma', {});
+    const statuses = await Promise.all(
+      [1, 2, 3].map(() => fetch(`${base}/api/projects`, { method: 'POST', body: JSON.stringify({ path }) }).then((r) => r.status)),
+    );
+    expect(statuses.sort()).toEqual([201, 409, 409]);
+    expect(JSON.parse(readFileSync(configPath, 'utf8')).projects).toHaveLength(1);
+  });
+
   test('POST 校验：相对路径 / 无 .agents/notes / 非 JSON 都是 400', async () => {
     const { base, root } = await start();
     const post = (body: string) => fetch(`${base}/api/projects`, { method: 'POST', body });
@@ -144,9 +156,11 @@ describe('项目管理接口', () => {
 
 describe('健康状态与来源校验', () => {
   test('手动项目路径失效时 healthy=false、watchMode=manual，不影响其他项目', async () => {
+    const missing = makeTempDir();
+    extraCleanup = missing.cleanup;
     env = await startTestServer(
       (root) => makeProject(root, 'Alpha', NOTES),
-      { projects: [{ path: join('Z:', 'missing', 'Ghost'), name: null, hidden: false }] },
+      { projects: [{ path: join(missing.dir, 'Ghost'), name: null, hidden: false }] },
     );
     const config = await getJson<ConfigResponse>(`${env.base}/api/config`);
     const ghost = config.projects.find((p) => p.id === 'Ghost')!;

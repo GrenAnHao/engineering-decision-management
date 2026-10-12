@@ -4,7 +4,7 @@ import { ConfigStore, type Config } from './config';
 import { allocateId, discoverProjects, hasNotesDir, pathKey, resolveProjects } from './discovery';
 import { Broadcaster } from './events';
 import { notesDir, scanNotes } from './scan';
-import { applyScan, createIndex, markUnhealthy, toMeta, toSummary, type ProjectIndex, type ScanCause } from './store';
+import { applyScan, createIndex, markUnhealthy, sameNotes, toMeta, toSummary, type ProjectIndex, type ScanCause } from './store';
 import { watchNotes, type WatchHandle } from './watcher';
 
 /** 带 HTTP 状态码的业务错误，api.ts 据此返回对应响应 */
@@ -118,7 +118,10 @@ export class Hub {
     if (!(await hasNotesDir(path))) throw new HubError(400, `该目录下没有 .agents/notes：${path}`);
     const key = pathKey(path);
     if (this.findByKey(key)) throw new HubError(409, '该项目已在列表中');
-    await this.updateConfig((c) => ({ ...c, projects: [...c.projects, { path: resolve(path), name: null, hidden: false }] }));
+    await this.updateConfig((c) => {
+      if (c.projects.some((e) => pathKey(e.path) === key)) throw new HubError(409, '该项目已在列表中');
+      return { ...c, projects: [...c.projects, { path: resolve(path), name: null, hidden: false }] };
+    });
     await this.syncProjects();
     this.broadcastConfig();
     const added = this.findByKey(key);
@@ -195,9 +198,9 @@ export class Hub {
     }
 
     await Promise.all(
-      added.map((id) => {
+      added.map(async (id) => {
+        await this.rescan(id, 'initial');
         this.startWatch(id);
-        return this.rescan(id, 'initial');
       }),
     );
     return changed;
@@ -205,12 +208,13 @@ export class Hub {
 
   private async scanNow(id: string, cause: ScanCause): Promise<ProjectIndex | undefined> {
     if (this.stopped || !this.projects.has(id)) return this.projects.get(id);
-    if (cause === 'manual' && this.projects.get(id)!.watchMode === 'manual') this.startWatch(id);
-    const path = this.projects.get(id)!.path;
+    if (cause === 'manual') this.startWatch(id);
+    const { path, key } = this.projects.get(id)!;
     try {
       const { notes, scanMs } = await scanNotes(notesDir(path));
       const current = this.projects.get(id);
-      if (!current) return undefined;
+      if (!current || current.key !== key) return undefined;
+      if (cause === 'file' && sameNotes(current.notes, notes)) return current;
       const next = applyScan(current, notes, scanMs, cause, Date.now());
       this.projects.set(id, next);
       this.events.broadcast('project-updated', {
@@ -224,9 +228,11 @@ export class Hub {
       return next;
     } catch (err) {
       const current = this.projects.get(id);
-      if (!current) return undefined;
+      if (!current || current.key !== key) return undefined;
       const reason = `路径失效：${(err as Error).message}`;
-      const next = markUnhealthy(current, reason);
+      const next = { ...markUnhealthy(current, reason), watchMode: 'manual' as const };
+      this.watchers.get(id)?.close();
+      this.watchers.delete(id);
       this.projects.set(id, next);
       this.events.broadcast('project-error', { id, reason });
       return next;
@@ -234,6 +240,7 @@ export class Hub {
   }
 
   private startWatch(id: string): void {
+    if (this.stopped) return;
     const index = this.projects.get(id);
     if (!index) return;
     this.watchers.get(id)?.close();
@@ -281,6 +288,7 @@ export class Hub {
     try {
       await this.config.update(mutate);
     } catch (err) {
+      if (err instanceof HubError) throw err;
       throw new HubError(409, (err as Error).message);
     }
   }

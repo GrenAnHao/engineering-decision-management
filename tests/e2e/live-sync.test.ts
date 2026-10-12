@@ -62,3 +62,20 @@ test('定期重扫扫描根发现新项目并广播 config-changed', async () =>
   expect(config.projects.find((p) => p.id === 'Second')!.count).toBe(1);
   await reader.cancel();
 });
+
+test('notes 目录被删后项目变为失效 + 手动刷新，不会一直显示旧数据', async () => {
+  env = await startTestServer((root) => makeProject(root, 'Gone', { 'implemented/feature/2026-01-01-a.md': note('a') }));
+  const reader = await openEvents(env.base);
+  rmSync(join(env.root, 'Gone', '.agents', 'notes'), { recursive: true, force: true });
+  await waitForEvent(reader, (event, data) => event === 'project-error' && (data as { id: string }).id === 'Gone', 5000);
+  const config = (await (await fetch(`${env.base}/api/config`)).json()) as ConfigResponse;
+  expect(config.projects.find((p) => p.id === 'Gone')).toMatchObject({ healthy: false, watchMode: 'manual', count: 0 });
+  await reader.cancel();
+});
+
+test('启动后没有真实改动时 lastChangeAt 仍取笔记日期（不被初始扫描误记为文件事件）', async () => {
+  env = await startTestServer((root) => makeProject(root, 'Calm', { 'implemented/feature/2026-01-01-a.md': note('a') }));
+  await Bun.sleep(1200);
+  const config = (await (await fetch(`${env.base}/api/config`)).json()) as ConfigResponse;
+  expect(config.projects.find((p) => p.id === 'Calm')!.lastChangeAt).toBe(Date.parse('2026-01-01T00:00:00'));
+});

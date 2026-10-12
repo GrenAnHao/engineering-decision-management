@@ -7,6 +7,7 @@ import {
   createIndex,
   latestNoteDateMs,
   markUnhealthy,
+  sameNotes,
   toMeta,
   toSummary,
 } from '../../src/server/store';
@@ -100,4 +101,14 @@ describe('applyScan / toMeta', () => {
 
 test('toSummary 去掉 rawBody', () => {
   expect('rawBody' in toSummary(doc('implemented/a/x.md'))).toBe(false);
+});
+
+describe('sameNotes', () => {
+  test('id 与 hash 都一致才算相同；改 hash、增删笔记都不同', () => {
+    const a = [doc('implemented/a/x.md'), doc('implemented/a/y.md')];
+    expect(sameNotes(a, [doc('implemented/a/y.md'), doc('implemented/a/x.md')])).toBe(true);
+    expect(sameNotes(a, [doc('implemented/a/x.md'), { ...doc('implemented/a/y.md'), hash: '1' }])).toBe(false);
+    expect(sameNotes(a, [doc('implemented/a/x.md')])).toBe(false);
+    expect(sameNotes(a, [doc('implemented/a/x.md'), doc('implemented/a/z.md')])).toBe(false);
+  });
 });
