@@ -3,11 +3,14 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigResponse, NotesResponse, ProjectUpdatedEvent } from '../../src/shared/types';
 import { makeProject, note } from '../helpers/fixture';
-import { startTestServer, waitForEvent, type TestEnv } from '../helpers/server';
+import { closeAllTestServers, startTestServer, useServerTestTimeout, waitForEvent, type TestEnv } from '../helpers/server';
+
+useServerTestTimeout();
 
 let env: TestEnv | null = null;
 afterEach(() => {
   env?.close();
+  closeAllTestServers();
   env = null;
 });
 

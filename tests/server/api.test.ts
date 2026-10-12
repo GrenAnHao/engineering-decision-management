@@ -4,12 +4,15 @@ import { join } from 'node:path';
 import type { ConfigResponse, NoteDetailResponse, NotesResponse, ProjectMeta } from '../../src/shared/types';
 import { isTrustedRequest } from '../../src/server/api';
 import { makeProject, makeTempDir, note } from '../helpers/fixture';
-import { startTestServer, type TestEnv } from '../helpers/server';
+import { closeAllTestServers, startTestServer, useServerTestTimeout, type TestEnv } from '../helpers/server';
+
+useServerTestTimeout();
 
 let env: TestEnv | null = null;
 let extraCleanup = () => {};
 afterEach(() => {
   env?.close();
+  closeAllTestServers();
   env = null;
   extraCleanup();
   extraCleanup = () => {};

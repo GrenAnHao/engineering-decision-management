@@ -1,3 +1,4 @@
+import { setDefaultTimeout } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer } from '../../src/server/app';
@@ -13,12 +14,40 @@ export type TestEnv = {
   close: () => void;
 };
 
+/**
+ * 把当前测试文件的单用例超时放宽到 20 s：e2e 用例内部会等待最长约 15 s 的文件事件与 SSE，
+ * 默认 5 s 会在高负载下误杀。bunfig.toml 的 [test] 不支持 timeout，而 setDefaultTimeout
+ * 按测试文件生效，所以每个用到测试服务的文件顶部都要调用一次。
+ */
+export function useServerTestTimeout(): void {
+  setDefaultTimeout(20_000);
+}
+
+const live = new Set<() => void>();
+
+/** 关闭所有尚未关闭的测试服务（在 afterEach 中调用，覆盖用例超时导致 env 未赋值的情况） */
+export function closeAllTestServers(): void {
+  for (const close of [...live]) close();
+}
+
 /** 在临时目录起一套 Hub + API 服务（不挂前端），scanRoots 指向 root */
 export async function startTestServer(
   setup: (root: string) => void,
   config: Record<string, unknown> = {},
 ): Promise<TestEnv> {
   const tmp = makeTempDir();
+  let hub: Hub | null = null;
+  let server: ReturnType<typeof createServer> | null = null;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    live.delete(close);
+    hub?.stop();
+    server?.stop(true);
+    tmp.cleanup();
+  };
+  live.add(close);
   const root = join(tmp.dir, 'root');
   const appDir = join(tmp.dir, 'app');
   mkdirSync(root, { recursive: true });
@@ -29,20 +58,16 @@ export async function startTestServer(
     configPath,
     JSON.stringify({ scanRoots: [root], scanDepth: 2, projects: [], watch: { debounceMs: 50, rescanRootsMs: 0 }, ...config }),
   );
-  const hub = new Hub({ configPath, heartbeatMs: 60_000 });
+  hub = new Hub({ configPath, heartbeatMs: 60_000 });
   await hub.start();
-  const server = createServer({ hub, port: 0 });
+  server = createServer({ hub, port: 0 });
   return {
     root,
     appDir,
     configPath,
     hub,
     base: `http://127.0.0.1:${server.port}`,
-    close: () => {
-      hub.stop();
-      server.stop(true);
-      tmp.cleanup();
-    },
+    close,
   };
 }
 
