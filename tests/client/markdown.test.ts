@@ -99,4 +99,23 @@ describe('parseBlocks', () => {
   test('空输入返回空数组', () => {
     expect(parseBlocks('')).toEqual([]);
   });
+
+  test('列表项内的围栏代码块归属该项', () => {
+    expect(parseBlocks('- a\n  ```\n  code\n  - not list\n  ```\n- b')).toEqual([
+      {
+        t: 'ul',
+        items: [
+          { c: [{ t: 'text', v: 'a' }], children: [{ t: 'pre', lang: '', v: 'code\n- not list' }] },
+          { c: [{ t: 'text', v: 'b' }], children: [] },
+        ],
+      },
+    ]);
+  });
+
+  test('超深嵌套不会卡死', () => {
+    const md = Array.from({ length: 1000 }, (_, i) => `${' '.repeat(i * 2)}- x`).join('\n');
+    const started = performance.now();
+    parseBlocks(md);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });

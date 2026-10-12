@@ -66,10 +66,13 @@ function leadingSpaces(line: string): number {
   return line.length - line.trimStart().length;
 }
 
+// 列表嵌套递归的深度上限，超过后子内容按段落处理，防止病态深嵌套超线性耗时
+const MAX_DEPTH = 8;
+
 type ListKind = 'ul' | 'ol';
 type PendingList = { kind: ListKind; indent: number; items: { text: string; sub: string[] }[] };
 
-export function parseBlocks(md: string): Block[] {
+export function parseBlocks(md: string, depth = 0): Block[] {
   const blocks: Block[] = [];
   const lines = md.replace(/\r\n?/g, '\n').split('\n');
   let para: string[] = [];
@@ -86,7 +89,11 @@ export function parseBlocks(md: string): Block[] {
         t: list.kind,
         items: list.items.map((it) => ({
           c: parseInline(it.text),
-          children: it.sub.length ? parseBlocks(it.sub.join('\n')) : [],
+          children: it.sub.length
+            ? depth < MAX_DEPTH
+              ? parseBlocks(it.sub.join('\n'), depth + 1)
+              : [{ t: 'p', c: parseInline(it.sub.join('\n')) }]
+            : [],
         })),
       });
     }
@@ -112,7 +119,8 @@ export function parseBlocks(md: string): Block[] {
       const deeper = item ? item[1]!.length > current.indent : true;
       if (deeper) {
         const last = current.items[current.items.length - 1]!;
-        if (item || last.sub.length) last.sub.push(line.slice(Math.min(leadingSpaces(line), current.indent + 2)));
+        const opensBlock = !!item || FENCE_RE.test(line.trimStart());
+        if (opensBlock || last.sub.length) last.sub.push(line.slice(Math.min(leadingSpaces(line), current.indent + 2)));
         else last.text += `\n${line.trim()}`;
         continue;
       }
