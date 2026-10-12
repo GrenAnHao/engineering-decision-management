@@ -1,4 +1,4 @@
-import type { LinkResult } from '../shared/types';
+import { isLifecycle, type LinkResult } from '../shared/types';
 import type { RawLink } from './parser';
 
 export type LinkIndex = { ids: ReadonlySet<string>; bySlug: ReadonlyMap<string, string> };
@@ -7,6 +7,12 @@ const ZH_MD_RE = /\.zh\.md$/i;
 
 function slugOf(path: string): string {
   return (path.split('/').pop() ?? path).replace(/\.md$/i, '');
+}
+
+/** 只有形如 <lifecycle>/<cls>/…/<file>.md 的目标才允许按 slug 回退，避免 README 之类通用名被误吸附 */
+function looksLikeNotePath(id: string): boolean {
+  const segs = id.split('/');
+  return segs.length >= 3 && isLifecycle(segs[0]!);
 }
 
 /** ids 需按稳定顺序传入：slug 冲突时先到者胜出 */
@@ -41,7 +47,7 @@ export function resolveLink(fromId: string, link: RawLink, index: LinkIndex): Li
   if (target === null) return { kind: 'external', rawHref, anchor };
   const id = target.replace(ZH_MD_RE, '.md');
   if (index.ids.has(id)) return { kind: 'resolved', targetId: id, rawHref, anchor };
-  const bySlug = index.bySlug.get(slugOf(id));
+  const bySlug = looksLikeNotePath(id) ? index.bySlug.get(slugOf(id)) : undefined;
   if (bySlug) return { kind: 'resolved', targetId: bySlug, rawHref, anchor };
   return { kind: 'unresolved', rawHref, anchor };
 }

@@ -72,6 +72,11 @@ describe('resolveLink', () => {
     const r = resolveLink(FROM, link('2026-10-10-job-guard.zh.md'), INDEX);
     expect(r.kind === 'resolved' && r.targetId).toBe('rejected/architecture/2026-10-10-job-guard.md');
   });
+
+  test('不像笔记路径的目标不做 slug 回退（README 等通用名）', () => {
+    const index = buildLinkIndex(['implemented/x/README.md', FROM]);
+    expect(resolveLink(FROM, link('../../docs/README.md'), index).kind).toBe('unresolved');
+  });
 });
 
 describe('resolveLinks', () => {
@@ -82,6 +87,7 @@ describe('resolveLinks', () => {
       INDEX,
     );
     expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ kind: 'resolved', rawHref: './2026-10-10-job-guard.md' });
   });
 });
 
