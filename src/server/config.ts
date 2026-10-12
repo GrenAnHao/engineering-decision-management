@@ -1,4 +1,5 @@
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 export type ProjectEntry = { path: string; name: string | null; hidden: boolean };
@@ -26,8 +27,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function positiveInt(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback;
+function intInRange(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
 
 function normalizeEntry(value: unknown): ProjectEntry | null {
@@ -41,17 +42,21 @@ export function normalizeConfig(input: unknown, defaults: Config): Config {
   if (!isRecord(input)) throw new Error('config.json 顶层必须是对象');
   const watch = isRecord(input.watch) ? input.watch : {};
   return {
-    port: positiveInt(input.port, defaults.port),
+    port: intInRange(input.port, 1, 65535, defaults.port),
     scanRoots: Array.isArray(input.scanRoots)
       ? input.scanRoots.filter((r): r is string => typeof r === 'string' && r.trim() !== '')
       : defaults.scanRoots,
-    scanDepth: positiveInt(input.scanDepth, defaults.scanDepth),
+    scanDepth: intInRange(input.scanDepth, 0, 10, defaults.scanDepth),
     projects: Array.isArray(input.projects)
       ? input.projects.map(normalizeEntry).filter((e): e is ProjectEntry => e !== null)
       : defaults.projects,
     watch: {
-      debounceMs: positiveInt(watch.debounceMs, defaults.watch.debounceMs),
-      rescanRootsMs: positiveInt(watch.rescanRootsMs, defaults.watch.rescanRootsMs),
+      debounceMs: intInRange(watch.debounceMs, 10, 10_000, defaults.watch.debounceMs),
+      // 0 表示关闭定期重扫，必须保留
+      rescanRootsMs:
+        watch.rescanRootsMs === 0
+          ? 0
+          : intInRange(watch.rescanRootsMs, 1000, 86_400_000, defaults.watch.rescanRootsMs),
     },
   };
 }
@@ -69,17 +74,40 @@ export async function loadConfig(path: string): Promise<LoadResult> {
     return { config: defaults, error: `读取 config.json 失败：${(err as Error).message}` };
   }
   try {
-    return { config: normalizeConfig(JSON.parse(text), defaults), error: null };
+    // 去掉记事本等编辑器保存的 UTF-8 BOM
+    return { config: normalizeConfig(JSON.parse(text.replace(/^﻿/, '')), defaults), error: null };
   } catch (err) {
     return { config: defaults, error: `config.json 解析失败，已使用内置默认值：${(err as Error).message}` };
   }
 }
 
-/** 原子写：先写同目录临时文件，再 rename 覆盖 */
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const RENAME_ATTEMPTS = 5;
+
+/** Windows 上目标文件被 OneDrive / 杀软 / 编辑器短暂占用时 rename 会报 EPERM/EBUSY，退避重试 */
+async function renameWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (!RENAME_RETRY_CODES.has(code) || attempt >= RENAME_ATTEMPTS) throw err;
+      await Bun.sleep(attempt * 40);
+    }
+  }
+}
+
+/** 原子写：先写同目录临时文件，再 rename 覆盖；失败时清理临时文件 */
 export async function saveConfig(path: string, config: Config): Promise<void> {
-  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  const tmp = `${path}.${randomUUID()}.tmp`;
   await writeFile(tmp, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-  await rename(tmp, path);
+  try {
+    await renameWithRetry(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
 }
 
 export class ConfigStore {
@@ -102,6 +130,7 @@ export class ConfigStore {
   /**
    * 读-改-写，串行执行。每次先重读磁盘以纳入用户手工编辑；
    * 若文件此刻已损坏则拒绝写入并抛错，保护用户文件。
+   * 写回的是规范化后的配置：未知字段与无效条目不会保留。
    */
   update(mutate: (config: Config) => Config): Promise<Config> {
     const run = async (): Promise<Config> => {

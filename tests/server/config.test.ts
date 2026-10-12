@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ConfigStore, defaultConfig, loadConfig, normalizeConfig, saveConfig } from '../../src/server/config';
 import { makeTempDir } from '../helpers/fixture';
@@ -40,6 +40,14 @@ describe('loadConfig', () => {
     expect(config.projects).toEqual([{ path: 'D:/y', name: 'Y', hidden: true }]);
     expect(config.watch).toEqual({ debounceMs: 150, rescanRootsMs: 60000 });
   });
+
+  test('带 BOM 的 UTF-8 文件正常解析', async () => {
+    const path = tempConfigPath();
+    writeFileSync(path, '﻿' + JSON.stringify({ port: 6001 }));
+    const { config, error } = await loadConfig(path);
+    expect(error).toBeNull();
+    expect(config.port).toBe(6001);
+  });
 });
 
 describe('normalizeConfig', () => {
@@ -58,6 +66,13 @@ describe('normalizeConfig', () => {
 
   test('顶层不是对象时抛错', () => {
     expect(() => normalizeConfig([], defaults)).toThrow();
+  });
+
+  test('越界数值回落默认值，rescanRootsMs 为 0 表示关闭', () => {
+    const config = normalizeConfig({ port: 70000, scanDepth: 99, watch: { debounceMs: 1, rescanRootsMs: 0 } }, defaults);
+    expect(config.port).toBe(5173);
+    expect(config.scanDepth).toBe(2);
+    expect(config.watch).toEqual({ debounceMs: 150, rescanRootsMs: 0 });
   });
 });
 
@@ -97,5 +112,25 @@ describe('saveConfig / ConfigStore.update', () => {
       ['a', 'b', 'c'].map((p) => store.update((c) => ({ ...c, projects: [...c.projects, { path: p, name: null, hidden: false }] }))),
     );
     expect(JSON.parse(readFileSync(path, 'utf8')).projects.map((p: { path: string }) => p.path)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('rename 失败时清理临时文件并抛错', async () => {
+    const path = tempConfigPath();
+    mkdirSync(path); // 目标是目录 → rename 必然失败
+    await expect(saveConfig(path, defaultConfig(path))).rejects.toThrow();
+    expect(readdirSync(join(path, '..'))).toEqual(['config.json']);
+  });
+
+  test('一次失败的 update 不会卡住后续 update', async () => {
+    const path = tempConfigPath();
+    const store = new ConfigStore(path);
+    await store.load();
+    await expect(
+      store.update(() => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    const next = await store.update((c) => ({ ...c, port: 6100 }));
+    expect(next.port).toBe(6100);
   });
 });
