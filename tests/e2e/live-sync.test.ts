@@ -79,3 +79,27 @@ test('启动后没有真实改动时 lastChangeAt 仍取笔记日期（不被初
   const config = (await (await fetch(`${env.base}/api/config`)).json()) as ConfigResponse;
   expect(config.projects.find((p) => p.id === 'Calm')!.lastChangeAt).toBe(Date.parse('2026-01-01T00:00:00'));
 });
+
+test('notes 目录被替换后自动在新目录上恢复实时监听', async () => {
+  env = await startTestServer((root) => makeProject(root, 'Swap', { 'implemented/feature/2026-01-01-a.md': note('a') }));
+  const notesRoot = join(env.root, 'Swap', '.agents', 'notes');
+  const reader = await openEvents(env.base);
+  rmSync(notesRoot, { recursive: true, force: true });
+  mkdirSync(join(notesRoot, 'implemented', 'feature'), { recursive: true });
+  writeFileSync(join(notesRoot, 'implemented', 'feature', '2026-02-02-b.md'), note('b'));
+  await waitForEvent(
+    reader,
+    (event, data) =>
+      event === 'project-updated' &&
+      (data as ProjectUpdatedEvent).project.counts.implemented === 1 &&
+      (data as ProjectUpdatedEvent).id === 'Swap' &&
+      (data as ProjectUpdatedEvent).count === 1,
+    8000,
+  );
+  await Bun.sleep(1500);
+  writeFileSync(join(notesRoot, 'implemented', 'feature', '2026-02-03-c.md'), note('c'));
+  await waitForEvent(reader, (event, data) => event === 'project-updated' && (data as ProjectUpdatedEvent).count === 2, 5000);
+  const config = (await (await fetch(`${env.base}/api/config`)).json()) as ConfigResponse;
+  expect(config.projects.find((p) => p.id === 'Swap')).toMatchObject({ healthy: true, watchMode: 'live', count: 2 });
+  await reader.cancel();
+});

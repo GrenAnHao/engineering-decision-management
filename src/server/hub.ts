@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { ConfigResponse, NoteDetailResponse, NotesResponse, ProjectMeta } from '../shared/types';
 import { ConfigStore, type Config } from './config';
@@ -201,6 +202,7 @@ export class Hub {
       added.map(async (id) => {
         await this.rescan(id, 'initial');
         this.startWatch(id);
+        void this.rescan(id, 'file');
       }),
     );
     return changed;
@@ -208,15 +210,15 @@ export class Hub {
 
   private async scanNow(id: string, cause: ScanCause): Promise<ProjectIndex | undefined> {
     if (this.stopped || !this.projects.has(id)) return this.projects.get(id);
-    if (cause === 'manual') this.startWatch(id);
     const { path, key } = this.projects.get(id)!;
     try {
       const { notes, scanMs } = await scanNotes(notesDir(path));
       const current = this.projects.get(id);
       if (!current || current.key !== key) return undefined;
-      if (cause === 'file' && sameNotes(current.notes, notes)) return current;
-      const next = applyScan(current, notes, scanMs, cause, Date.now());
-      this.projects.set(id, next);
+      if (cause === 'file' && current.healthy && sameNotes(current.notes, notes)) return current;
+      this.projects.set(id, applyScan(current, notes, scanMs, cause, Date.now()));
+      if (cause === 'manual') this.startWatch(id);
+      const next = this.projects.get(id)!;
       this.events.broadcast('project-updated', {
         id,
         count: notes.length,
@@ -249,13 +251,28 @@ export class Hub {
       const handle = watchNotes(notesDir(index.path), {
         debounceMs: this.config.current.watch.debounceMs,
         onChange: () => void this.rescan(id, 'file'),
-        onError: (err) => this.degrade(id, err),
+        onError: (err) => this.onWatchError(id, err),
       });
       this.watchers.set(id, handle);
       this.projects.set(id, { ...index, watchMode: 'live' });
     } catch (err) {
       this.degrade(id, err as Error);
     }
+  }
+
+  private onWatchError(id: string, err: Error): void {
+    const index = this.projects.get(id);
+    if (!index || this.stopped) return;
+    if (existsSync(notesDir(index.path))) {
+      // 目录被替换（如切分支）：在新目录上重建监听并补扫一次
+      this.startWatch(id);
+      void this.rescan(id, 'file');
+      return;
+    }
+    // 目录确实没了：交给扫描走失效分支（unhealthy + manual + 单次 project-error）
+    void this.rescan(id, 'file').then((next) => {
+      if (next?.healthy) this.degrade(id, err);
+    });
   }
 
   private degrade(id: string, err: Error): void {

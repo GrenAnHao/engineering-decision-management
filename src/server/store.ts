@@ -66,7 +66,6 @@ export function countLifecycles(notes: readonly NoteDoc[]): LifecycleCounts {
   return counts;
 }
 
-/** 笔记 date 字段的最大值（毫秒），无日期时为 0 */
 /** 两次扫描的笔记集合是否完全相同（id 与内容哈希都一致） */
 export function sameNotes(a: readonly NoteDoc[], b: readonly NoteDoc[]): boolean {
   if (a.length !== b.length) return false;
@@ -74,6 +73,7 @@ export function sameNotes(a: readonly NoteDoc[], b: readonly NoteDoc[]): boolean
   return b.every((n) => hashes.get(n.id) === n.hash);
 }
 
+/** 笔记 date 字段的最大值（毫秒），无日期时为 0 */
 export function latestNoteDateMs(notes: readonly NoteDoc[]): number {
   let max = 0;
   for (const note of notes) {
