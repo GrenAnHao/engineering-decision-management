@@ -10,6 +10,7 @@ export type SegmentedControlProps<T extends string> = {
   /** 整组的可访问名称 */
   label: string;
   value: T;
+  /** 应保持引用稳定（模块常量或 useMemo），否则每次渲染都会重新测量 */
   options: readonly SegmentOption<T>[];
   onChange: (value: T) => void;
   /** true：始终只显示图标；'below-lg'：lg 以下只显示图标。文字都会保留给读屏与 title */
@@ -46,7 +47,7 @@ export function SegmentedControl<T extends string>({
   iconOnly = false,
   className,
 }: SegmentedControlProps<T>) {
-  const listRef = useRef<HTMLElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
   const radio = mode === 'radio';
   const hasActive = options.some((o) => o.value === value);
@@ -67,7 +68,7 @@ export function SegmentedControl<T extends string>({
     observer.observe(list);
     for (const el of buttons()) observer.observe(el);
     return () => observer.disconnect();
-  }, [value, options, iconOnly]);
+  }, [value, options, iconOnly, radio]);
 
   // radio 组内用方向键移动并立即选中（WAI-ARIA radio group 约定），焦点跟着走
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
@@ -79,14 +80,10 @@ export function SegmentedControl<T extends string>({
     buttons().find((el) => el.dataset.value === next.value)?.focus();
   };
 
-  // 动态标签的 ref 类型对不上 div / nav 的并集，用回调 ref 写入统一的 HTMLElement ref
-  const setList = (el: HTMLElement | null) => {
-    listRef.current = el;
-  };
   const Root = radio ? 'div' : 'nav';
   return (
     <Root
-      ref={setList}
+      ref={listRef}
       role={radio ? 'radiogroup' : undefined}
       aria-label={label}
       onKeyDown={onKeyDown}
