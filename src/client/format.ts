@@ -15,6 +15,29 @@ export function relativeTime(ms: number, now = Date.now()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+function startOfDay(ms: number): number {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** 通知时间：今天「14:32」，其余「10月11日 14:32」 */
+export function clockTime(ms: number, now = Date.now()): string {
+  const d = new Date(ms);
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return startOfDay(ms) === startOfDay(now) ? hm : `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+}
+
+export type DayGroup = '今天' | '昨天' | '更早';
+
+/** 按自然日分组；「昨天」取今天零点前一毫秒所在日，夏令时切换日也正确 */
+export function dayGroup(ms: number, now = Date.now()): DayGroup {
+  const today = startOfDay(now);
+  if (ms >= today) return '今天';
+  return ms >= startOfDay(today - 1) ? '昨天' : '更早';
+}
+
 /** Markdown → 单行纯文本，用于卡片摘要与检索 */
 export function plainText(md: string): string {
   return md
