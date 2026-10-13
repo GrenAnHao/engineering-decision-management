@@ -159,12 +159,12 @@ useFullscreen(): { supported: boolean; active: boolean; toggle: () => void }
 - **正文**：每行是标签加笔记标题。新增、修改、迁移的行是按钮，点击打开笔记；删除的行是划线灰字，不可交互。
 - `variant="toast"`：最多 3 行，之后显示「另有 …」汇总；底部 2px 倒计时进度条。
 - `variant="drawer"`：默认 3 行，超出时显示「展开全部 N 处 ▾」，可以展开和收起。
-- 点项目名：`onOpenProject(projectId)`。点行：`onOpenNote(projectId, noteId)`。
+- 点项目名：`onOpenProject(notification)`。点行：`onOpenNote(notification, noteId)`。传整条通知，是因为「项目已移除」的提示要用到快照里的项目名。
 
 ### 4.3 `NotificationStack`（`components/NotificationStack.tsx`）
 
 - 位置在右上角：`fixed top-16 right-4 z-[60]`，宽度 `w-[min(92vw,22rem)]`，入场动画用 `animate-slide-in-right`。
-- 最多同时显示 3 张，其余排队；每张 6 秒后收起。鼠标悬停或焦点在卡片内时暂停计时，离开后重新计时。
+- 最多同时显示 3 张，其余排队；每张 6 秒后收起。鼠标悬停或焦点在卡片内时暂停计时（两者分别跟踪，任一成立即暂停），离开后按剩余时间继续，倒计时条同步暂停。
 - 外层用 `aria-live="polite"` 区域，写法同 `Toaster`。
 - 卡片的 × 只把它移出弹出队列，不从 store 删除。
 - 现有的 `Toaster`（右下角，用于操作回执）不动。
@@ -198,7 +198,7 @@ Drawer({ label, labelledBy?, width, onClose, children })
 
 ### 4.5 系统通知（`notifications/desktop.ts`）
 
-- `permission()`、`request()`、`notify(n, onClick)`。
+- `desktopPermission()`、`requestDesktopPermission()`、`showDesktopNotification(n, onClick)`。
 - 标题是项目名；正文是摘要加第一处变更的标题（异常和已恢复显示原因或「实时监听已恢复」）。
 - `tag: edm:${projectId}`，同一项目的新通知替换旧的。
 - 点击时依次执行 `window.focus()`、跳转（规则同 4.4 的点项目名）、`notification.close()`。
