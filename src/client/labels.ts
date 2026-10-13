@@ -70,5 +70,8 @@ export function projectColor(order: number): string {
   return PALETTE[order % PALETTE.length]!;
 }
 
-/** 变更动作的徽标色（文案在 notifications/derive.ts） */
+/** 变更动作的文案 */
+export const CHANGE_KIND_LABELS: Record<NoteChange['kind'], string> = { moved: '迁移', added: '新增', modified: '修改', removed: '删除' };
+
+/** 变更动作的徽标色 */
 export const CHANGE_TONES: Record<NoteChange['kind'], Tone> = { moved: 'purple', added: 'emerald', modified: 'blue', removed: 'rose' };

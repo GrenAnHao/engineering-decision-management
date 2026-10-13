@@ -37,7 +37,13 @@ function isBody(value: unknown): boolean {
   if (!isRecord(value)) return false;
   switch (value.type) {
     case 'changes':
-      return Array.isArray(value.changes) && value.changes.length > 0 && value.changes.every(isNoteChange);
+      // total 可缺（旧数据，读取时补成 changes.length），有则必须是数字
+      return (
+        Array.isArray(value.changes) &&
+        value.changes.length > 0 &&
+        value.changes.every(isNoteChange) &&
+        (value.total === undefined || typeof value.total === 'number')
+      );
     case 'error':
       return isString(value.reason);
     case 'recovered':
@@ -60,11 +66,19 @@ function isNotification(value: unknown): value is AppNotification {
   );
 }
 
+/** 补齐旧数据缺的 total；total 小于明细条数（脏数据）时同样以明细条数为准 */
+function normalize(n: AppNotification): AppNotification {
+  const { body } = n;
+  if (body.type !== 'changes') return n;
+  const total = typeof body.total === 'number' && body.total >= body.changes.length ? body.total : body.changes.length;
+  return total === body.total ? n : { ...n, body: { ...body, total } };
+}
+
 function parse(raw: string | null): AppNotification[] {
   if (!raw) return EMPTY;
   try {
     const value: unknown = JSON.parse(raw);
-    return Array.isArray(value) ? value.filter(isNotification) : EMPTY;
+    return Array.isArray(value) ? value.filter(isNotification).map(normalize) : EMPTY;
   } catch {
     return EMPTY;
   }

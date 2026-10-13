@@ -3,10 +3,12 @@ import type { NoteChange, ProjectMeta } from '../../src/shared/types';
 import {
   changeLabel,
   groupByDay,
+  MAX_STORED_CHANGES,
   notificationLabel,
   notificationText,
   remainderText,
   summarize,
+  unretainedText,
   toNotifications,
 } from '../../src/client/notifications/derive';
 import type { AppNotification } from '../../src/client/notifications/types';
@@ -54,9 +56,25 @@ describe('toNotifications', () => {
         projectOrder: 2,
         at: 1000,
         read: false,
-        body: { type: 'changes', changes: [added] },
+        body: { type: 'changes', changes: [added], total: 1 },
       },
     ]);
+  });
+
+  test('一次变更超过 MAX_STORED_CHANGES 处时只保留前面的明细，total 记真实总数', () => {
+    const many: NoteChange[] = Array.from({ length: MAX_STORED_CHANGES + 30 }, (_, i) => ({ ...added, id: `implemented/a/${i}.md`, title: `T${i}` }));
+    const body = toNotifications(updated(meta(), many), meta(), NO_ERRORS).notifications[0]!.body;
+    if (body.type !== 'changes') throw new Error('应为变更通知');
+    expect(body.changes).toHaveLength(MAX_STORED_CHANGES);
+    expect(body.changes[0]!.title).toBe('T0');
+    expect(body.changes.at(-1)!.title).toBe(`T${MAX_STORED_CHANGES - 1}`);
+    expect(body.total).toBe(MAX_STORED_CHANGES + 30);
+  });
+
+  test('恰好 MAX_STORED_CHANGES 处时不截断', () => {
+    const exact: NoteChange[] = Array.from({ length: MAX_STORED_CHANGES }, (_, i) => ({ ...added, id: `implemented/a/${i}.md` }));
+    const body = toNotifications(updated(meta(), exact), meta(), NO_ERRORS).notifications[0]!.body;
+    expect(body).toEqual({ type: 'changes', changes: exact, total: MAX_STORED_CHANGES });
   });
 
   test('没有 changes 的更新不通知', () => {
@@ -142,6 +160,23 @@ describe('文案', () => {
     expect(summarize([modified, added, modified, moved])).toBe('迁移 1、新增 1、修改 2');
   });
 
+  test('summarize：明细被截断时末尾补「，共 total 处」', () => {
+    expect(summarize([added, modified], 2)).toBe('新增 1、修改 1');
+    expect(summarize([added, modified], 120)).toBe('新增 1、修改 1，共 120 处');
+  });
+
+  test('remainderText：计入未保留明细', () => {
+    expect(remainderText([moved, added, added, modified, removed], 3, 52)).toBe('另有 1 处修改、1 处删除，及 47 处其他');
+    // 保留下来的都在预览里，剩下的全是未保留明细
+    expect(remainderText([added, modified], 3, 52)).toBe('另有 50 处');
+    expect(remainderText([added, modified], 3, 2)).toBeNull();
+  });
+
+  test('unretainedText：未截断返回 null', () => {
+    expect(unretainedText(50, 120)).toBe('另有 70 处未保留明细');
+    expect(unretainedText(50, 50)).toBeNull();
+  });
+
   test('remainderText 汇总前 limit 处之后的部分；没有剩余返回 null', () => {
     expect(remainderText([moved, added, added, modified, removed], 3)).toBe('另有 1 处修改、1 处删除');
     expect(remainderText([added, modified], 3)).toBeNull();
@@ -149,14 +184,15 @@ describe('文案', () => {
 
   test('notificationText 用于系统通知正文与读屏', () => {
     const base = { id: 'x', projectId: 'P', projectName: '项目 P', projectOrder: 0, at: 0, read: false };
-    expect(notificationText({ ...base, body: { type: 'changes', changes: [added, modified] } })).toBe('新增 1、修改 1：X');
+    expect(notificationText({ ...base, body: { type: 'changes', changes: [added, modified], total: 2 } })).toBe('新增 1、修改 1：X');
+    expect(notificationText({ ...base, body: { type: 'changes', changes: [added], total: 9 } })).toBe('新增 1，共 9 处：X');
     expect(notificationText({ ...base, body: { type: 'error', reason: '路径失效' } })).toBe('路径失效');
     expect(notificationText({ ...base, body: { type: 'recovered' } })).toBe('实时监听已恢复');
   });
 
   test('notificationLabel 是「项目名：一句话描述」，用作卡片可访问名称与读屏摘要', () => {
     const base = { id: 'x', projectId: 'P', projectName: '项目 P', projectOrder: 0, at: 0, read: false };
-    expect(notificationLabel({ ...base, body: { type: 'changes', changes: [added] } })).toBe('项目 P：新增 1：X');
+    expect(notificationLabel({ ...base, body: { type: 'changes', changes: [added], total: 1 } })).toBe('项目 P：新增 1：X');
     expect(notificationLabel({ ...base, body: { type: 'error', reason: '路径失效' } })).toBe('项目 P：路径失效');
   });
 });

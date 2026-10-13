@@ -1,6 +1,6 @@
 import type { NoteChange, ProjectErrorEvent, ProjectMeta, ProjectUpdatedEvent } from '../../shared/types';
 import { dayGroup, type DayGroup } from '../format';
-import { STATUS_LABELS } from '../labels';
+import { CHANGE_KIND_LABELS, STATUS_LABELS } from '../labels';
 import type { AppNotification, NotificationBody } from './types';
 
 export type HubNotifyEvent =
@@ -16,7 +16,8 @@ export type DeriveResult = {
 type ChangeKind = NoteChange['kind'];
 const KIND_ORDER: readonly ChangeKind[] = ['moved', 'added', 'modified', 'removed'];
 
-export const CHANGE_KIND_LABELS: Record<ChangeKind, string> = { moved: '迁移', added: '新增', modified: '修改', removed: '删除' };
+/** 单条通知最多保留的变更明细数：切分支时可能一次几百处，全存会撑爆 localStorage 配额 */
+export const MAX_STORED_CHANGES = 50;
 
 function make(project: ProjectMeta, at: number, body: NotificationBody): AppNotification {
   return {
@@ -62,7 +63,7 @@ export function toNotifications(
   if (project.hidden) return { notifications: [], lastErrors: errors };
   const notifications: AppNotification[] = [];
   if (recovered) notifications.push(make(project, at, { type: 'recovered' }));
-  if (changes && changes.length > 0) notifications.push(make(project, at, { type: 'changes', changes }));
+  if (changes && changes.length > 0) notifications.push(make(project, at, { type: 'changes', changes: changes.slice(0, MAX_STORED_CHANGES), total: changes.length }));
   return { notifications, lastErrors: errors };
 }
 
@@ -74,27 +75,38 @@ function countByKind(changes: readonly NoteChange[]): [ChangeKind, number][] {
   return KIND_ORDER.map((kind): [ChangeKind, number] => [kind, changes.filter((c) => c.kind === kind).length]).filter(([, n]) => n > 0);
 }
 
-/** 「迁移 1、新增 1、修改 2」 */
-export function summarize(changes: readonly NoteChange[]): string {
-  return countByKind(changes)
+/** 「迁移 1、新增 1、修改 2」；明细被截断（total 大于 changes 条数）时末尾补「，共 total 处」 */
+export function summarize(changes: readonly NoteChange[], total: number = changes.length): string {
+  const text = countByKind(changes)
     .map(([kind, n]) => `${CHANGE_KIND_LABELS[kind]} ${n}`)
     .join('、');
+  return total > changes.length ? `${text}，共 ${total} 处` : text;
 }
 
-/** 卡片只列前 limit 处时末尾的「另有 1 处修改、1 处删除」；没有剩余返回 null */
-export function remainderText(changes: readonly NoteChange[], limit: number): string | null {
+/**
+ * 卡片只列前 limit 处时末尾的「另有 1 处修改、1 处删除」；没有剩余返回 null。
+ * total 大于 changes 条数时，未保留明细的部分记为「及 N 处其他」。
+ */
+export function remainderText(changes: readonly NoteChange[], limit: number, total: number = changes.length): string | null {
   const rest = changes.slice(limit);
-  if (rest.length === 0) return null;
-  return `另有 ${countByKind(rest)
-    .map(([kind, n]) => `${n} 处${CHANGE_KIND_LABELS[kind]}`)
-    .join('、')}`;
+  const unretained = Math.max(0, total - changes.length);
+  if (rest.length === 0 && unretained === 0) return null;
+  const kinds = countByKind(rest).map(([kind, n]) => `${n} 处${CHANGE_KIND_LABELS[kind]}`);
+  if (unretained === 0) return `另有 ${kinds.join('、')}`;
+  if (kinds.length === 0) return `另有 ${unretained} 处`;
+  return `另有 ${kinds.join('、')}，及 ${unretained} 处其他`;
+}
+
+/** drawer 展开全部后末尾那行小字；明细没被截断返回 null */
+export function unretainedText(retained: number, total: number): string | null {
+  return total > retained ? `另有 ${total - retained} 处未保留明细` : null;
 }
 
 /** 一句话描述：系统通知正文，也是 notificationLabel 的后半句 */
 export function notificationText(n: AppNotification): string {
   switch (n.body.type) {
     case 'changes':
-      return `${summarize(n.body.changes)}：${n.body.changes[0]?.title ?? ''}`;
+      return `${summarize(n.body.changes, n.body.total)}：${n.body.changes[0]?.title ?? ''}`;
     case 'error':
       return n.body.reason;
     case 'recovered':

@@ -1,7 +1,8 @@
 import type { NoteChange } from '../../shared/types';
 
 export type NotificationBody =
-  | { type: 'changes'; changes: NoteChange[] }
+  /** changes 最多保留 MAX_STORED_CHANGES 条明细；total 是真实总数（旧数据读取时补成 changes.length） */
+  | { type: 'changes'; changes: NoteChange[]; total: number }
   | { type: 'error'; reason: string }
   | { type: 'recovered' };
 

@@ -85,7 +85,7 @@ export function useHub(onNotify?: (items: readonly AppNotification[]) => void): 
       lastErrorsRef.current = result.lastErrors;
       if (result.notifications.length > 0) onNotifyRef.current?.(result.notifications);
     } catch (err) {
-      console.error('变更通知处理失败', err);
+      console.error('[notify] 变更通知处理失败', err);
     }
   }, []);
 

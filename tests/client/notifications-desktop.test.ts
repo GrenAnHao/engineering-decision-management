@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { desktopPermission, showDesktopNotification } from '../../src/client/notifications/desktop';
-import { notificationText } from '../../src/client/notifications/derive';
+import { desktopPermission, desktopText, errorCategory, showDesktopNotification } from '../../src/client/notifications/desktop';
 import type { AppNotification } from '../../src/client/notifications/types';
 
 const n: AppNotification = {
@@ -66,7 +65,7 @@ test('没有 Notification 时权限为 unsupported', () => {
 test('已授权：按项目名与 tag 构造，点击依次聚焦窗口、跳转、关闭', () => {
   stubNotification('granted');
   showDesktopNotification(n, () => calls.push('click'));
-  expect(constructed).toEqual([{ title: '工程决策中心', options: { body: notificationText(n), tag: 'edm:P' } }]);
+  expect(constructed).toEqual([{ title: '工程决策中心', options: { body: desktopText(n), tag: 'edm:P' } }]);
   instances[0]!.onclick?.();
   expect(calls).toEqual(['focus', 'click', 'close']);
 });
@@ -88,4 +87,29 @@ test('构造抛错时静默跳过', () => {
   );
   defineGlobal('Notification', Throwing);
   expect(() => showDesktopNotification(n, () => {})).not.toThrow();
+});
+
+test('errorCategory 取第一个「：」之前的类别；没有「：」或类别为空时用通用说法', () => {
+  expect(errorCategory("路径失效：ENOENT: no such file or directory, scandir 'C:\\Users\\x\\p'")).toBe('路径失效');
+  expect(errorCategory('实时监听不可用，已切换为手动刷新：EMFILE')).toBe('实时监听不可用，已切换为手动刷新');
+  expect(errorCategory('路径失效')).toBe('项目异常');
+  expect(errorCategory("scandir 'C:\\Users\\x'")).toBe('项目异常');
+  expect(errorCategory('：只有原因')).toBe('项目异常');
+  expect(errorCategory('')).toBe('项目异常');
+});
+
+test('desktopText：异常只显示类别，变更与恢复照常', () => {
+  const base = { id: 'x', projectId: 'P', projectName: 'P', projectOrder: 0, at: 0, read: false };
+  const reason = "路径失效：ENOENT: scandir 'C:\\Users\\x\\p'";
+  expect(desktopText({ ...base, body: { type: 'error', reason } })).toBe('路径失效');
+  expect(desktopText({ ...base, body: { type: 'recovered' } })).toBe('实时监听已恢复');
+  const change = { kind: 'added', id: 'a.md', title: 'X', lifecycle: 'implemented' } as const;
+  expect(desktopText({ ...base, body: { type: 'changes', changes: [change], total: 1 } })).toBe('新增 1：X');
+});
+
+test('异常的系统通知正文不含本机路径', () => {
+  stubNotification('granted');
+  const body = { type: 'error', reason: "路径失效：scandir 'C:\\Users\\x\\p'" } as const;
+  showDesktopNotification({ ...n, body }, () => {});
+  expect(constructed).toEqual([{ title: '工程决策中心', options: { body: '路径失效', tag: 'edm:P' } }]);
 });

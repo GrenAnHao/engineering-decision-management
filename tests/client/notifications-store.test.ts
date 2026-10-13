@@ -131,7 +131,8 @@ test('结构不合法的条目被过滤，合法条目保留', () => {
       withBody({ type: 'changes', changes: [{ ...goodChange, lifecycle: 'draft' }] }),
       withBody({ type: 'changes', changes: [{ ...goodMove, to: 'draft' }] }),
       withBody({ type: 'changes', changes: [{ ...goodMove, from: 5 }] }),
-      { ...n('ok-changes'), body: { type: 'changes', changes: [goodChange, goodMove] } },
+      withBody({ type: 'changes', changes: [goodChange], total: '3' }),
+      { ...n('ok-changes'), body: { type: 'changes', changes: [goodChange, goodMove], total: 2 } },
       { ...n('ok-error'), body: { type: 'error', reason: '坏了' } },
       n('ok-recovered'),
     ]),
@@ -188,4 +189,20 @@ test('localStorage 不可用时存在内存里，本次会话内照常使用', (
   expect(readNotifications().map((x) => x.id)).toEqual(['a']);
   markAllRead();
   expect(readNotifications()[0]!.read).toBe(true);
+});
+
+test('旧数据没有 total：读取时补成 changes.length；脏的 total（小于明细条数）同样回退', () => {
+  const data = stubStorage();
+  const change = { kind: 'added', id: 'i', title: 't', lifecycle: 'implemented' };
+  const stored = (id: string, extra: object) => ({ ...n(id), body: { type: 'changes', changes: [change, change], ...extra } });
+  data.set('edm-notifications', JSON.stringify([stored('legacy', {}), stored('truncated', { total: 120 }), stored('dirty', { total: 1 })]));
+  const bodies = readNotifications().map((x) => (x.body.type === 'changes' ? x.body.total : null));
+  expect(bodies).toEqual([2, 120, 2]);
+  expect(readNotifications()).toBe(readNotifications());
+});
+
+test('写入时按原样存下 total', () => {
+  const body: AppNotification['body'] = { type: 'changes', changes: [{ kind: 'added', id: 'i', title: 't', lifecycle: 'implemented' }], total: 80 };
+  pushNotifications([{ ...n('big'), body }]);
+  expect(readNotifications()[0]!.body).toEqual(body);
 });

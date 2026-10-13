@@ -23,9 +23,6 @@ export type NotificationCenter = {
   activate: OpenNotification;
 };
 
-/**
- * 变更通知的前端调度：通知抽屉开关、右上角弹出队列，以及新通知到达时的分流（规则见 routing.routeIncoming）。
- */
 const EMPTY_HIGHLIGHTS: ReadonlySet<string> = new Set();
 
 type SetHighlighted = (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) => void;
@@ -37,6 +34,9 @@ function highlightThenMarkRead(setHighlighted: SetHighlighted, extra: readonly s
   markAllRead();
 }
 
+/**
+ * 变更通知的前端调度：通知抽屉开关、右上角弹出队列，以及新通知到达时的分流（规则见 routing.routeIncoming）。
+ */
 export function useNotificationCenter(onOpen: OpenNotification): NotificationCenter {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toasts, setToasts] = useState<readonly AppNotification[]>([]);

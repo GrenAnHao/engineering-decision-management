@@ -21,6 +21,8 @@ function notification(body: AppNotification['body'], over: Partial<AppNotificati
   return { id: 'n1', projectId: 'P', projectName: '工程决策中心', projectOrder: 1, at: Date.now(), read: false, body, ...over };
 }
 
+const changesBody = (changes: NoteChange[], total = changes.length): AppNotification['body'] => ({ type: 'changes', changes, total });
+
 const render = (n: AppNotification, variant: 'toast' | 'drawer', highlighted = false) =>
   renderToStaticMarkup(
     <NotificationCard notification={n} variant={variant} highlighted={highlighted} onOpenProject={noop} onOpenNote={noop} onDismiss={noop} />,
@@ -29,7 +31,7 @@ const render = (n: AppNotification, variant: 'toast' | 'drawer', highlighted = f
 const buttons = (html: string) => html.match(/<button/g)?.length ?? 0;
 
 test('已删除的笔记划线显示、不渲染成按钮；其余行可点', () => {
-  const html = render(notification({ type: 'changes', changes: [change('added', 'A'), change('removed', 'B')] }), 'drawer');
+  const html = render(notification(changesBody([change('added', 'A'), change('removed', 'B')])), 'drawer');
   expect(html).toContain('line-through');
   expect(html).toContain('>B<');
   // 项目名 + 清除 + 「A」这一行
@@ -37,12 +39,12 @@ test('已删除的笔记划线显示、不渲染成按钮；其余行可点', ()
 });
 
 test('迁移行的标签写成「待评审 → 已落地」', () => {
-  expect(render(notification({ type: 'changes', changes: [moved] }), 'drawer')).toContain('待评审 → 已落地');
+  expect(render(notification(changesBody([moved])), 'drawer')).toContain('待评审 → 已落地');
 });
 
 test('toast：超过 3 处时只列前 3 处并汇总剩余，带倒计时条', () => {
   const changes = [moved, change('added', 'A'), change('added', 'C'), change('modified', 'Y'), change('removed', 'Z')];
-  const html = render(notification({ type: 'changes', changes }), 'toast');
+  const html = render(notification(changesBody(changes)), 'toast');
   expect(html).toContain('另有 1 处修改、1 处删除');
   expect(html).not.toContain('>Y<');
   expect(html).toContain('animate-toast-timer');
@@ -52,7 +54,7 @@ test('toast：超过 3 处时只列前 3 处并汇总剩余，带倒计时条', 
 
 test('drawer：超过 3 处时有「展开全部」，高亮时带「新」，清除按钮', () => {
   const changes = [moved, change('added', 'A'), change('added', 'C'), change('modified', 'Y')];
-  const html = render(notification({ type: 'changes', changes }), 'drawer', true);
+  const html = render(notification(changesBody(changes)), 'drawer', true);
   expect(html).toContain('展开全部 4 处');
   expect(html).toContain('aria-expanded="false"');
   expect(html).toContain('>新<');
@@ -61,6 +63,21 @@ test('drawer：超过 3 处时有「展开全部」，高亮时带「新」，�
   expect(controls).toBeTruthy();
   expect(html).toContain(`id="${controls}"`);
   expect(html).toContain('aria-label="清除通知：工程决策中心"');
+});
+
+test('toast：明细被截断时页眉用 total，剩余部分带「其他」', () => {
+  const changes = [change('added', 'A'), change('added', 'B'), change('added', 'C'), change('modified', 'Y'), change('removed', 'Z')];
+  const html = render(notification(changesBody(changes, 52)), 'toast');
+  expect(html).toContain('52 处变更 · 刚刚');
+  expect(html).toContain('另有 1 处修改、1 处删除，及 47 处其他');
+});
+
+test('drawer：页眉用 total；收起时不出现「未保留明细」', () => {
+  const changes = [change('added', 'A'), change('added', 'B'), change('added', 'C'), change('modified', 'Y')];
+  const html = render(notification(changesBody(changes, 120)), 'drawer');
+  expect(html).toContain('120 处 ·');
+  expect(html).toContain('展开全部 4 处');
+  expect(html).not.toContain('未保留明细');
 });
 
 test('drawer：「新」只看 highlighted，不看 read', () => {
@@ -81,7 +98,7 @@ test('异常与已恢复', () => {
 });
 
 test('卡片带项目色变量与可访问名称', () => {
-  const html = render(notification({ type: 'changes', changes: [change('added', 'A')] }), 'drawer');
+  const html = render(notification(changesBody([change('added', 'A')])), 'drawer');
   expect(html).toContain(`--project:${projectColor(1)}`);
   expect(html).toContain('aria-label="工程决策中心：新增 1：A"');
 });
@@ -126,7 +143,7 @@ test('通知抽屉：只有 highlighted 集合里的卡片显示「新」，与 
 });
 
 test('弹出栈：live 区域只放一句摘要，卡片在另一个不带 aria-live 的容器里；最多显示 3 张', () => {
-  const items = ['a', 'b', 'c', 'd'].map((id) => notification({ type: 'changes', changes: [change('added', id)] }, { id }));
+  const items = ['a', 'b', 'c', 'd'].map((id) => notification(changesBody([change('added', id)]), { id }));
   const html = renderToStaticMarkup(<NotificationStack items={items} onDismiss={noop} onOpenProject={noop} onOpenNote={noop} />);
   const live = /<div[^>]*aria-live="polite"[^>]*>(.*?)<\/div>/.exec(html);
   expect(live?.[0]).toContain('sr-only');

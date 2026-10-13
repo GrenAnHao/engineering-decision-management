@@ -3,7 +3,7 @@ import { useId, useState, type CSSProperties } from 'react';
 import type { NoteChange } from '../../shared/types';
 import { clockTime } from '../format';
 import { CHANGE_TONES, projectColor } from '../labels';
-import { changeLabel, notificationLabel, remainderText } from '../notifications/derive';
+import { changeLabel, notificationLabel, remainderText, unretainedText } from '../notifications/derive';
 import type { AppNotification } from '../notifications/types';
 import { Badge } from '../ui/Badge';
 import { cn } from '../ui/tw';
@@ -61,7 +61,7 @@ function StatusRow({ tone, label, text }: { tone: 'amber' | 'emerald'; label: st
 }
 
 function headerMeta(n: AppNotification, variant: NotificationCardProps['variant'], now: number): string {
-  const count = n.body.type === 'changes' ? n.body.changes.length : 0;
+  const count = n.body.type === 'changes' ? n.body.total : 0;
   if (variant === 'toast') return count > 0 ? `${count} 处变更 · 刚刚` : '刚刚';
   const time = clockTime(n.at, now);
   return count > 0 ? `${count} 处 · ${time}` : time;
@@ -72,8 +72,10 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const changes = n.body.type === 'changes' ? n.body.changes : [];
+  const total = n.body.type === 'changes' ? n.body.total : 0;
   const visible = variant === 'drawer' && expanded ? changes : changes.slice(0, PREVIEW_ROWS);
-  const remainder = variant === 'toast' ? remainderText(changes, PREVIEW_ROWS) : null;
+  const unretained = variant === 'drawer' && expanded ? unretainedText(changes.length, total) : null;
+  const remainder = variant === 'toast' ? remainderText(changes, PREVIEW_ROWS, total) : null;
   const canExpand = variant === 'drawer' && changes.length > PREVIEW_ROWS;
 
   return (
@@ -113,6 +115,7 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
           ))}
         </div>
         {remainder && <p className="px-1.5 pt-0.5 pb-1 text-xs text-fg-subtle">{remainder}</p>}
+        {unretained && <p className="px-1.5 pt-0.5 pb-1 text-xs text-fg-subtle">{unretained}</p>}
         {canExpand && (
           <button
             type="button"
