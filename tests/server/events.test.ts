@@ -15,8 +15,8 @@ async function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>): Promi
 }
 
 test('formatEvent 输出标准 SSE 帧', () => {
-  expect(formatEvent('project-error', { id: 'Pi', reason: 'x' })).toBe(
-    'event: project-error\ndata: {"id":"Pi","reason":"x"}\n\n',
+  expect(formatEvent('project-error', { id: 'Pi', reason: 'x', at: 1 })).toBe(
+    'event: project-error\ndata: {"id":"Pi","reason":"x","at":1}\n\n',
   );
 });
 
@@ -36,7 +36,7 @@ test('broadcast 推送给所有客户端', async () => {
   const b = hub.connect().body!.getReader();
   await readChunk(a);
   await readChunk(b);
-  hub.broadcast('project-error', { id: 'Pi', reason: '路径失效' });
+  hub.broadcast('project-error', { id: 'Pi', reason: '路径失效', at: 1 });
   expect(await readChunk(a)).toContain('event: project-error');
   expect(await readChunk(b)).toContain('路径失效');
 });
@@ -59,7 +59,7 @@ test('客户端取消后从列表移除', async () => {
 test('不读取的慢客户端积压超过阈值后被断开', () => {
   hub = new Broadcaster(60_000);
   hub.connect();
-  for (let i = 0; i < 200; i += 1) hub.broadcast('project-error', { id: 'Pi', reason: String(i) });
+  for (let i = 0; i < 200; i += 1) hub.broadcast('project-error', { id: 'Pi', reason: String(i), at: i });
   expect(hub.size).toBe(0);
 });
 

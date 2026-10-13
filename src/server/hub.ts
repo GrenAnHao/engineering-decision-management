@@ -5,7 +5,7 @@ import { ConfigStore, type Config } from './config';
 import { allocateId, discoverProjects, hasNotesDir, pathKey, resolveProjects } from './discovery';
 import { Broadcaster } from './events';
 import { notesDir, scanNotes } from './scan';
-import { applyScan, createIndex, markUnhealthy, sameNotes, toMeta, toSummary, type ProjectIndex, type ScanCause } from './store';
+import { applyScan, createIndex, diffNotes, markUnhealthy, sameNotes, toMeta, toSummary, type ProjectIndex, type ScanCause } from './store';
 import { watchNotes, type WatchHandle } from './watcher';
 
 /** 带 HTTP 状态码的业务错误，api.ts 据此返回对应响应 */
@@ -216,6 +216,8 @@ export class Hub {
       const current = this.projects.get(id);
       if (!current || current.key !== key) return undefined;
       if (cause === 'file' && current.healthy && sameNotes(current.notes, notes)) return current;
+      // 首次扫描的旧列表本来就空；失效时 markUnhealthy 清空了 notes。这两种情况算 diff 会把全部笔记当成「新增」
+      const changes = cause !== 'initial' && current.healthy ? diffNotes(current.notes, notes) : [];
       this.projects.set(id, applyScan(current, notes, scanMs, cause, Date.now()));
       if (cause === 'manual') this.startWatch(id);
       const next = this.projects.get(id)!;
@@ -226,6 +228,7 @@ export class Hub {
         scanMs,
         at: next.scannedAt,
         project: toMeta(next),
+        ...(changes.length > 0 ? { changes } : {}),
       });
       return next;
     } catch (err) {
@@ -236,7 +239,7 @@ export class Hub {
       this.watchers.get(id)?.close();
       this.watchers.delete(id);
       this.projects.set(id, next);
-      this.events.broadcast('project-error', { id, reason });
+      this.events.broadcast('project-error', { id, reason, at: Date.now() });
       return next;
     }
   }
@@ -281,7 +284,7 @@ export class Hub {
     const index = this.projects.get(id);
     if (!index) return;
     this.projects.set(id, { ...index, watchMode: 'manual' });
-    this.events.broadcast('project-error', { id, reason: `实时监听不可用，已切换为手动刷新：${err.message}` });
+    this.events.broadcast('project-error', { id, reason: `实时监听不可用，已切换为手动刷新：${err.message}`, at: Date.now() });
   }
 
   private dropProject(id: string): void {

@@ -77,6 +77,11 @@ export type NotesResponse = {
 
 export type NoteDetailResponse = { note: NoteDoc };
 
+/** 两次扫描之间单篇笔记的变化。moved 的 id 是新 id（打开笔记用），fromId 是旧 id */
+export type NoteChange =
+  | { kind: 'added' | 'modified' | 'removed'; id: string; title: string; lifecycle: Lifecycle }
+  | { kind: 'moved'; id: string; fromId: string; title: string; from: Lifecycle; to: Lifecycle };
+
 export type ConnectedEvent = { clientId: string };
 export type ProjectUpdatedEvent = {
   id: string;
@@ -85,9 +90,12 @@ export type ProjectUpdatedEvent = {
   scanMs: number;
   at: number;
   project: ProjectMeta;
+  /** 与上一次扫描相比的笔记变化；首次扫描、从失效恢复、无变化时不带 */
+  changes?: NoteChange[];
 };
 export type ConfigChangedEvent = { projects: ProjectMeta[] };
-export type ProjectErrorEvent = { id: string; reason: string };
+/** at：服务端时间戳，前端据此生成确定性通知 id（多个标签页去重） */
+export type ProjectErrorEvent = { id: string; reason: string; at: number };
 
 export type HubEventMap = {
   connected: ConnectedEvent;

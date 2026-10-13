@@ -1,6 +1,7 @@
 import {
   LIFECYCLES,
   type LifecycleCounts,
+  type NoteChange,
   type NoteDoc,
   type NoteSummary,
   type ProjectMeta,
@@ -131,4 +132,58 @@ export function toMeta(index: ProjectIndex): ProjectMeta {
 export function toSummary(note: NoteDoc): NoteSummary {
   const { rawBody: _rawBody, ...summary } = note;
   return summary;
+}
+
+/** 码点序比较，结果与运行时 / 区域设置无关 */
+function byCodePoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** 去掉首段生命周期目录：implemented/feature/x.md → feature/x.md，用来识别状态迁移 */
+function withoutLifecycle(id: string): string {
+  return id.slice(id.indexOf('/') + 1);
+}
+
+const CHANGE_ORDER: Record<NoteChange['kind'], number> = { moved: 0, added: 1, modified: 2, removed: 3 };
+
+/**
+ * 两次扫描之间的笔记变化。
+ * 新增与删除里去掉首段后 id 相同的配成一次迁移（同一去首段 id 有多个候选时按完整 id 码点序依次配对）；
+ * 迁移同时内容也改了，只记一条 moved。输出按 迁移 → 新增 → 修改 → 删除，组内按标题、再按 id 排序。
+ */
+export function diffNotes(prev: readonly NoteDoc[], next: readonly NoteDoc[]): NoteChange[] {
+  const prevById = new Map(prev.map((n) => [n.id, n]));
+  const nextById = new Map(next.map((n) => [n.id, n]));
+  const byId = (a: NoteDoc, b: NoteDoc) => byCodePoint(a.id, b.id);
+  const added = next.filter((n) => !prevById.has(n.id)).sort(byId);
+  const removed = prev.filter((n) => !nextById.has(n.id)).sort(byId);
+
+  const removedByRest = new Map<string, NoteDoc[]>();
+  for (const n of removed) {
+    const rest = withoutLifecycle(n.id);
+    removedByRest.set(rest, [...(removedByRest.get(rest) ?? []), n]);
+  }
+
+  const changes: NoteChange[] = [];
+  const paired = new Set<string>();
+  for (const n of added) {
+    const from = removedByRest.get(withoutLifecycle(n.id))?.find((c) => !paired.has(c.id));
+    if (from) {
+      paired.add(from.id);
+      changes.push({ kind: 'moved', id: n.id, fromId: from.id, title: n.title, from: from.lifecycle, to: n.lifecycle });
+    } else {
+      changes.push({ kind: 'added', id: n.id, title: n.title, lifecycle: n.lifecycle });
+    }
+  }
+  for (const n of next) {
+    const old = prevById.get(n.id);
+    if (old && old.hash !== n.hash) changes.push({ kind: 'modified', id: n.id, title: n.title, lifecycle: n.lifecycle });
+  }
+  for (const n of removed) {
+    if (!paired.has(n.id)) changes.push({ kind: 'removed', id: n.id, title: n.title, lifecycle: n.lifecycle });
+  }
+
+  return changes.sort(
+    (a, b) => CHANGE_ORDER[a.kind] - CHANGE_ORDER[b.kind] || byCodePoint(a.title, b.title) || byCodePoint(a.id, b.id),
+  );
 }

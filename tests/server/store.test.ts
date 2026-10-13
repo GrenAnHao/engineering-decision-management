@@ -5,6 +5,7 @@ import {
   computeInCount,
   countLifecycles,
   createIndex,
+  diffNotes,
   latestNoteDateMs,
   markUnhealthy,
   sameNotes,
@@ -110,5 +111,71 @@ describe('sameNotes', () => {
     expect(sameNotes(a, [doc('implemented/a/x.md'), { ...doc('implemented/a/y.md'), hash: '1' }])).toBe(false);
     expect(sameNotes(a, [doc('implemented/a/x.md')])).toBe(false);
     expect(sameNotes(a, [doc('implemented/a/x.md'), doc('implemented/a/z.md')])).toBe(false);
+  });
+});
+
+describe('diffNotes', () => {
+  const withHash = (id: string, hash: string, title = id): NoteDoc => ({ ...doc(id), hash, title });
+
+  test('无变化时返回空数组', () => {
+    const notes = [doc('implemented/a/x.md'), doc('proposed/a/y.md')];
+    expect(diffNotes(notes, notes)).toEqual([]);
+  });
+
+  test('识别新增、修改、删除', () => {
+    const prev = [withHash('implemented/a/keep.md', '1'), withHash('implemented/a/edit.md', '1'), withHash('implemented/a/gone.md', '1')];
+    const next = [withHash('implemented/a/keep.md', '1'), withHash('implemented/a/edit.md', '2'), withHash('proposed/b/new.md', '1')];
+    expect(diffNotes(prev, next)).toEqual([
+      { kind: 'added', id: 'proposed/b/new.md', title: 'proposed/b/new.md', lifecycle: 'proposed' },
+      { kind: 'modified', id: 'implemented/a/edit.md', title: 'implemented/a/edit.md', lifecycle: 'implemented' },
+      { kind: 'removed', id: 'implemented/a/gone.md', title: 'implemented/a/gone.md', lifecycle: 'implemented' },
+    ]);
+  });
+
+  test('换了生命周期目录的同名笔记记为一次迁移，内容同时改了也只记一条', () => {
+    const prev = [withHash('proposed/feature/2026-01-01-x.md', '1', 'X')];
+    const next = [withHash('implemented/feature/2026-01-01-x.md', '2', 'X 改')];
+    expect(diffNotes(prev, next)).toEqual([
+      {
+        kind: 'moved',
+        id: 'implemented/feature/2026-01-01-x.md',
+        fromId: 'proposed/feature/2026-01-01-x.md',
+        title: 'X 改',
+        from: 'proposed',
+        to: 'implemented',
+      },
+    ]);
+  });
+
+  test('同一去首段 id 有多个候选时按完整 id 码点序配对，多出来的仍记为删除', () => {
+    const prev = [doc('rejected/a/x.md'), doc('proposed/a/x.md')];
+    const next = [doc('implemented/a/x.md')];
+    expect(diffNotes(prev, next)).toEqual([
+      { kind: 'moved', id: 'implemented/a/x.md', fromId: 'proposed/a/x.md', title: 'implemented/a/x.md', from: 'proposed', to: 'implemented' },
+      { kind: 'removed', id: 'rejected/a/x.md', title: 'rejected/a/x.md', lifecycle: 'rejected' },
+    ]);
+  });
+
+  test('不同分类目录下的同名文件不算迁移', () => {
+    const changes = diffNotes([doc('proposed/a/x.md')], [doc('implemented/b/x.md')]);
+    expect(changes.map((c) => c.kind)).toEqual(['added', 'removed']);
+  });
+
+  test('输出按 迁移 → 新增 → 修改 → 删除 排序，组内按标题', () => {
+    const prev = [withHash('implemented/a/m.md', '1', 'M'), doc('proposed/a/mv.md'), withHash('implemented/a/z.md', '1', 'Z'), withHash('implemented/a/b.md', '1', 'B')];
+    const next = [
+      withHash('implemented/a/m.md', '2', 'M'),
+      doc('implemented/a/mv.md'),
+      withHash('proposed/a/y.md', '1', 'Y'),
+      withHash('proposed/a/c.md', '1', 'C'),
+    ];
+    expect(diffNotes(prev, next).map((c) => `${c.kind}:${c.title}`)).toEqual([
+      'moved:implemented/a/mv.md',
+      'added:C',
+      'added:Y',
+      'modified:M',
+      'removed:B',
+      'removed:Z',
+    ]);
   });
 });
