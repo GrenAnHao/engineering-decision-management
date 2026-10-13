@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { showDesktopNotification } from './desktop';
 import { markAllRead, pushNotifications } from './store';
-import { enqueueToasts, routeIncoming } from './toastQueue';
+import { routeIncoming } from './routing';
+import { enqueueToasts } from './toastQueue';
 import type { AppNotification } from './types';
 
 export type OpenNotification = (notification: AppNotification, noteId: string | null) => void;
@@ -20,7 +21,7 @@ export type NotificationCenter = {
 };
 
 /**
- * 变更通知的前端调度：通知抽屉开关、右上角弹出队列，以及新通知到达时的分流（规则见 toastQueue.routeIncoming）。
+ * 变更通知的前端调度：通知抽屉开关、右上角弹出队列，以及新通知到达时的分流（规则见 routing.routeIncoming）。
  */
 export function useNotificationCenter(onOpen: OpenNotification): NotificationCenter {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -30,6 +31,15 @@ export function useNotificationCenter(onOpen: OpenNotification): NotificationCen
   useEffect(() => {
     onOpenRef.current = onOpen;
   });
+
+  // 抽屉开着时切到后台收到的通知保持未读（见 routeIncoming）；回到前台、抽屉仍开着时，它们已经摆在眼前，补标已读
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && drawerOpenRef.current) markAllRead();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
 
   const closeDrawer = useCallback(() => {
     drawerOpenRef.current = false;

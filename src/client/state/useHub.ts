@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConfigChangedEvent, ProjectErrorEvent, ProjectMeta, ProjectUpdatedEvent } from '../../shared/types';
 import { api } from '../api';
+import { projectsAfterRefresh } from './projects';
 import { toNotifications, type HubNotifyEvent } from '../notifications/derive';
 import type { AppNotification } from '../notifications/types';
 
@@ -36,18 +37,6 @@ function upsert(projects: ProjectMeta[], next: ProjectMeta): ProjectMeta[] {
   return projects.some((p) => p.id === next.id) ? projects.map((p) => (p.id === next.id ? next : p)) : [...projects, next];
 }
 
-/**
- * 合并一次 /api/config 的响应：请求发出之后又收到过 project-updated 的项目（isNewer 为真），
- * 内存里的 meta 比响应新，保留内存版本；其余以响应为准（含增删）。
- */
-export function mergeFetchedProjects(
-  fetched: readonly ProjectMeta[],
-  current: readonly ProjectMeta[],
-  isNewer: (id: string) => boolean,
-): ProjectMeta[] {
-  return fetched.map((p) => (isNewer(p.id) ? (current.find((q) => q.id === p.id) ?? p) : p));
-}
-
 function parse<T>(event: Event): T | null {
   try {
     return JSON.parse((event as MessageEvent<string>).data) as T;
@@ -75,6 +64,8 @@ export function useHub(onNotify?: (items: readonly AppNotification[]) => void): 
   /** 递增的 project-updated 序号，以及每个项目最近一次 updated 的序号：用来判断 refresh 响应是否比内存旧 */
   const updateSeqRef = useRef(0);
   const updatedAtSeqRef = useRef(new Map<string, number>());
+  /** config-changed 的次数：refresh 期间来过的话，响应里的清单比事件带来的旧 */
+  const configSeqRef = useRef(0);
   const lastErrorsRef = useRef<ReadonlyMap<string, string>>(new Map());
   const onNotifyRef = useRef(onNotify);
   useEffect(() => {
@@ -101,14 +92,16 @@ export function useHub(onNotify?: (items: readonly AppNotification[]) => void): 
   const refreshConfig = useCallback(async () => {
     // 用序号而不是「开始时清空集合」：多个 refresh 重叠时，后发的不会抹掉先发那次期间记下的更新
     const startedAt = updateSeqRef.current;
+    const configSeqAtStart = configSeqRef.current;
     try {
       const config = await api.config();
-      const isNewer = (id: string) => (updatedAtSeqRef.current.get(id) ?? 0) > startedAt;
-      commitProjects(mergeFetchedProjects(config.projects, projectsRef.current, isNewer), () => ({
-        loaded: true,
-        loadError: null,
-        configError: config.configError,
-      }));
+      const next = projectsAfterRefresh(config.projects, projectsRef.current, {
+        configChanged: configSeqRef.current > configSeqAtStart,
+        isNewer: (id) => (updatedAtSeqRef.current.get(id) ?? 0) > startedAt,
+      });
+      const patch = { loaded: true, loadError: null, configError: config.configError };
+      if (next) commitProjects(next, () => patch);
+      else setState((s) => ({ ...s, ...patch }));
     } catch (err) {
       setState((s) => ({ ...s, loadError: (err as Error).message }));
     }
@@ -154,7 +147,10 @@ export function useHub(onNotify?: (items: readonly AppNotification[]) => void): 
       });
       es.addEventListener('config-changed', (event) => {
         const data = parse<ConfigChangedEvent>(event);
-        if (data) commitProjects(data.projects);
+        if (data) {
+          configSeqRef.current += 1;
+          commitProjects(data.projects);
+        }
         // 事件不带 configError，补拉一次以同步配置文件错误提示
         void refreshConfig();
       });

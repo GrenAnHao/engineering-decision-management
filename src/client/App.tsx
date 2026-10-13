@@ -124,7 +124,10 @@ function Shell() {
     navigate(target.route);
   }
 
-  // 抽屉互斥兜底：openNote 已在同一批更新里收起通知抽屉；这里兜住其他改 hash 打开笔记的途径
+  // 抽屉互斥兜底：openNote 已在同一批更新里收起通知抽屉；直接改 hash 打开笔记时，
+  // 渲染条件里的 !route?.note 让通知抽屉与笔记抽屉的挂载在同一次提交里完成（先卸后挂，焦点不被抢），
+  // 这个 effect 只负责把 drawerOpen 复位
+  const notificationsVisible = center.drawerOpen && !route?.note;
   useEffect(() => {
     if (route?.note) closeNotifications();
   }, [route?.note, closeNotifications]);
@@ -201,7 +204,7 @@ function Shell() {
         onThemeChange={setTheme}
         fullscreen={fullscreen}
         unread={unread}
-        notificationsOpen={center.drawerOpen}
+        notificationsOpen={notificationsVisible}
         onOpenNotifications={center.openDrawer}
       />
       <div className="flex">
@@ -259,7 +262,7 @@ function Shell() {
         onOpenProject={(n) => center.activate(n, null)}
         onOpenNote={center.activate}
       />
-      {center.drawerOpen && (
+      {notificationsVisible && (
         <NotificationDrawer
           items={notifications}
           onClose={center.closeDrawer}

@@ -3,7 +3,7 @@ import { notificationTarget } from '../../src/client/notifications/target';
 import type { AppNotification } from '../../src/client/notifications/types';
 
 const n: AppNotification = {
-  id: 'changes:P:1',
+  id: 'recovered:P:1',
   projectId: 'P',
   projectName: '项目 P',
   projectOrder: 0,
