@@ -12,18 +12,47 @@ let memory: AppNotification[] | null = null;
 /** 按原始字符串缓存解析结果：useSyncExternalStore 要求没有变化时返回同一个引用 */
 let cache: { raw: string | null; items: AppNotification[] } = { raw: null, items: EMPTY };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object';
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+function isNoteChange(value: unknown): boolean {
+  if (!isRecord(value) || !isString(value.id) || !isString(value.title)) return false;
+  switch (value.kind) {
+    case 'added':
+    case 'modified':
+    case 'removed':
+      return isString(value.lifecycle);
+    case 'moved':
+      return isString(value.fromId) && isString(value.from) && isString(value.to);
+    default:
+      return false;
+  }
+}
+
+function isBody(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  switch (value.type) {
+    case 'changes':
+      return Array.isArray(value.changes) && value.changes.every(isNoteChange);
+    case 'error':
+      return isString(value.reason);
+    case 'recovered':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function isNotification(value: unknown): value is AppNotification {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
   return (
-    typeof v.id === 'string' &&
-    typeof v.projectId === 'string' &&
-    typeof v.projectName === 'string' &&
-    typeof v.projectOrder === 'number' &&
-    typeof v.at === 'number' &&
-    typeof v.read === 'boolean' &&
-    !!v.body &&
-    typeof (v.body as { type?: unknown }).type === 'string'
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.projectId) &&
+    isString(value.projectName) &&
+    typeof value.projectOrder === 'number' &&
+    typeof value.at === 'number' &&
+    typeof value.read === 'boolean' &&
+    isBody(value.body)
   );
 }
 

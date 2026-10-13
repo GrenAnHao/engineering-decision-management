@@ -90,6 +90,30 @@ test('没有变化时快照引用不变（useSyncExternalStore 依赖这一点�
   expect(readNotifications()).toBe(readNotifications());
 });
 
+test('结构不合法的条目被过滤，合法条目保留', () => {
+  const data = stubStorage();
+  const withBody = (body: unknown) => ({ ...n('bad'), body });
+  const goodChange = { kind: 'added', id: 'i', title: 't', lifecycle: 'implemented' };
+  const goodMove = { kind: 'moved', id: 'i', fromId: 'j', title: 't', from: 'proposed', to: 'implemented' };
+  data.set(
+    'edm-notifications',
+    JSON.stringify([
+      withBody({ type: 'changes' }),
+      withBody({ type: 'changes', changes: 'x' }),
+      withBody({ type: 'mystery' }),
+      withBody({ type: 'error' }),
+      withBody({ type: 'changes', changes: [goodChange, { kind: 'added', id: 'i', title: 't' }] }),
+      withBody({ type: 'changes', changes: [{ kind: 'moved', id: 'i', title: 't', from: 'a', to: 'b' }] }),
+      withBody({ type: 'changes', changes: [{ kind: 'renamed', id: 'i', title: 't', lifecycle: 'x' }] }),
+      withBody({ type: 'changes', changes: [null] }),
+      { ...n('ok-changes'), body: { type: 'changes', changes: [goodChange, goodMove] } },
+      { ...n('ok-error'), body: { type: 'error', reason: '坏了' } },
+      n('ok-recovered'),
+    ]),
+  );
+  expect(readNotifications().map((x) => x.id)).toEqual(['ok-changes', 'ok-error', 'ok-recovered']);
+});
+
 test('localStorage 里是损坏的 JSON 或非数组时当作空列表', () => {
   const data = stubStorage();
   data.set('edm-notifications', '{oops');

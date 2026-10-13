@@ -80,6 +80,13 @@ describe('toNotifications', () => {
     expect(fromManual.notifications.map((n) => n.body.type)).toEqual(['recovered']);
   });
 
+  test('隐藏项目恢复时不通知，但仍清掉异常记录', () => {
+    const hidden = meta({ hidden: true });
+    const result = toNotifications(updated(hidden, [added]), meta({ hidden: true, watchMode: 'manual' }), new Map([['P', '坏了']]));
+    expect(result.notifications).toEqual([]);
+    expect(result.lastErrors.has('P')).toBe(false);
+  });
+
   test('恢复与变更同时发生时两条都发，已恢复在前', () => {
     const { notifications } = toNotifications(updated(meta(), [added]), meta({ watchMode: 'manual' }), NO_ERRORS);
     expect(notifications.map((n) => n.body.type)).toEqual(['recovered', 'changes']);

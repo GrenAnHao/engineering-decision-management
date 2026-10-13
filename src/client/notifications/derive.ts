@@ -50,15 +50,17 @@ export function toNotifications(
   }
 
   const { project, changes, at } = event.data;
-  if (project.hidden) return { notifications: [], lastErrors };
-  const notifications: AppNotification[] = [];
+  const recovered = !!prevMeta && !isLive(prevMeta) && isLive(project);
+  // 恢复后清掉异常记录，隐藏项目也不例外：取消隐藏后同一原因的异常不能被当成重复
   let errors = lastErrors;
-  if (prevMeta && !isLive(prevMeta) && isLive(project)) {
-    notifications.push(make(project, at, { type: 'recovered' }));
+  if (recovered) {
     const next = new Map(lastErrors);
     next.delete(project.id);
     errors = next;
   }
+  if (project.hidden) return { notifications: [], lastErrors: errors };
+  const notifications: AppNotification[] = [];
+  if (recovered) notifications.push(make(project, at, { type: 'recovered' }));
   if (changes && changes.length > 0) notifications.push(make(project, at, { type: 'changes', changes }));
   return { notifications, lastErrors: errors };
 }
