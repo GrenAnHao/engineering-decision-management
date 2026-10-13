@@ -6,6 +6,8 @@ import {
   MAX_NOTIFICATIONS,
   pushNotifications,
   readNotifications,
+  resetNotificationStoreForTest,
+  subscribeNotifications as subscribe,
 } from '../../src/client/notifications/store';
 import type { AppNotification } from '../../src/client/notifications/types';
 
@@ -39,12 +41,11 @@ const n = (id: string, at = 0): AppNotification => ({
 
 beforeEach(() => {
   stubStorage();
-  clearNotifications();
+  resetNotificationStoreForTest();
 });
 
 afterEach(() => {
-  stubStorage();
-  clearNotifications(); // 清掉模块里的内存兜底
+  resetNotificationStoreForTest(); // 清掉模块里的内存兜底与读失败标记
   if (realStorage) Object.defineProperty(globalThis, 'localStorage', realStorage);
   else delete (globalThis as { localStorage?: unknown }).localStorage;
 });
@@ -54,6 +55,11 @@ test('新通知排在最前，返回真正新增的那些；重复 id 被忽略'
   expect(pushNotifications([n('b'), n('a')]).map((x) => x.id)).toEqual(['b']);
   expect(readNotifications().map((x) => x.id)).toEqual(['b', 'a']);
   expect(pushNotifications([n('a')])).toEqual([]);
+});
+
+test('同一批里重复的 id 只存一条', () => {
+  expect(pushNotifications([n('a'), n('a'), n('b')]).map((x) => x.id)).toEqual(['a', 'b']);
+  expect(readNotifications().map((x) => x.id)).toEqual(['a', 'b']);
 });
 
 test('写入 localStorage 并能读回（模拟刷新页面）', () => {
@@ -69,6 +75,21 @@ test(`最多保留 ${MAX_NOTIFICATIONS} 条，超出时丢弃最旧的`, () => {
   expect(items).toHaveLength(MAX_NOTIFICATIONS);
   expect(items[0]!.id).toBe('new');
   expect(items.at(-1)!.id).toBe(`old-${MAX_NOTIFICATIONS - 2}`);
+});
+
+test('清除不存在的条目或空列表时不写盘也不通知', () => {
+  const data = stubStorage();
+  let emitted = 0;
+  const unsubscribe = subscribe(() => emitted++);
+  dismissNotification('nope');
+  clearNotifications();
+  expect(data.size).toBe(0);
+  expect(emitted).toBe(0);
+  pushNotifications([n('a')]);
+  expect(emitted).toBe(1);
+  dismissNotification('nope');
+  expect(emitted).toBe(1);
+  unsubscribe();
 });
 
 test('单条清除与全部清除', () => {
@@ -106,6 +127,10 @@ test('结构不合法的条目被过滤，合法条目保留', () => {
       withBody({ type: 'changes', changes: [{ kind: 'moved', id: 'i', title: 't', from: 'a', to: 'b' }] }),
       withBody({ type: 'changes', changes: [{ kind: 'renamed', id: 'i', title: 't', lifecycle: 'x' }] }),
       withBody({ type: 'changes', changes: [null] }),
+      withBody({ type: 'changes', changes: [] }),
+      withBody({ type: 'changes', changes: [{ ...goodChange, lifecycle: 'draft' }] }),
+      withBody({ type: 'changes', changes: [{ ...goodMove, to: 'draft' }] }),
+      withBody({ type: 'changes', changes: [{ ...goodMove, from: 5 }] }),
       { ...n('ok-changes'), body: { type: 'changes', changes: [goodChange, goodMove] } },
       { ...n('ok-error'), body: { type: 'error', reason: '坏了' } },
       n('ok-recovered'),
@@ -122,6 +147,29 @@ test('localStorage 里是损坏的 JSON 或非数组时当作空列表', () => {
   expect(readNotifications()).toEqual([]);
   data.set('edm-notifications', JSON.stringify([n('ok'), { id: 1 }, null]));
   expect(readNotifications().map((x) => x.id)).toEqual(['ok']);
+});
+
+test('读失败后进入内存模式：存储恢复也不会覆盖磁盘上的历史，快照引用稳定', () => {
+  const disk = new Map([['edm-notifications', JSON.stringify([n('history')])]]);
+  stubStorage(true);
+  expect(readNotifications()).toEqual([]);
+  pushNotifications([n('a')]);
+  expect(readNotifications().map((x) => x.id)).toEqual(['a']);
+  expect(readNotifications()).toBe(readNotifications());
+
+  // 存储恢复：换回一个读写正常、里面还有原始数据的 stub
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => disk.get(k) ?? null,
+      setItem: (k: string, v: string) => void disk.set(k, v),
+      removeItem: (k: string) => void disk.delete(k),
+    },
+  });
+  pushNotifications([n('b')]);
+  markAllRead();
+  expect(readNotifications().map((x) => x.id)).toEqual(['b', 'a']);
+  expect(JSON.parse(disk.get('edm-notifications')!)).toEqual([n('history')]);
 });
 
 test('localStorage 不可用时存在内存里，本次会话内照常使用', () => {

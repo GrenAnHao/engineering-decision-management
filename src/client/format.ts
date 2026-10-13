@@ -2,6 +2,8 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
 /** 左栏新鲜度：刚刚 / 12m 前 / 3h 前 / 昨天 / 5 天前 / 日期 */
 export function relativeTime(ms: number, now = Date.now()): string {
   if (!ms) return '—';
@@ -12,21 +14,21 @@ export function relativeTime(ms: number, now = Date.now()): string {
   if (diff < 2 * DAY) return '昨天';
   if (diff < 30 * DAY) return `${Math.floor(diff / DAY)} 天前`;
   const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
 
 function startOfDay(ms: number): number {
   const d = new Date(ms);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-/** 通知时间：今天「14:32」，其余「10月11日 14:32」 */
+/** 通知时间：今天「14:32」，今年其他日子「10月11日 14:32」，跨年「2025年1月3日 14:32」 */
 export function clockTime(ms: number, now = Date.now()): string {
   const d = new Date(ms);
   const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  return startOfDay(ms) === startOfDay(now) ? hm : `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+  if (startOfDay(ms) === startOfDay(now)) return hm;
+  const year = d.getFullYear() === new Date(now).getFullYear() ? '' : `${d.getFullYear()}年`;
+  return `${year}${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
 }
 
 export type DayGroup = '今天' | '昨天' | '更早';

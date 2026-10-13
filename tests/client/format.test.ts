@@ -10,6 +10,11 @@ test('今天只显示时分，其他日子带月日', () => {
   expect(clockTime(at(1, 3, 0, 0), NOW)).toBe('1月3日 00:00');
 });
 
+test('跨年的通知带上年份', () => {
+  expect(clockTime(new Date(2025, 0, 3, 0, 0).getTime(), NOW)).toBe('2025年1月3日 00:00');
+  expect(clockTime(new Date(2025, 11, 31, 23, 59).getTime(), NOW)).toBe('2025年12月31日 23:59');
+});
+
 test('按自然日分为 今天 / 昨天 / 更早', () => {
   expect(dayGroup(at(10, 12, 0, 0), NOW)).toBe('今天');
   expect(dayGroup(at(10, 11, 23, 59), NOW)).toBe('昨天');

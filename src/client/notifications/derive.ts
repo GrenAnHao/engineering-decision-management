@@ -1,7 +1,6 @@
 import type { NoteChange, ProjectErrorEvent, ProjectMeta, ProjectUpdatedEvent } from '../../shared/types';
 import { dayGroup, type DayGroup } from '../format';
 import { STATUS_LABELS } from '../labels';
-import type { Tone } from '../ui/Badge';
 import type { AppNotification, NotificationBody } from './types';
 
 export type HubNotifyEvent =
@@ -18,7 +17,6 @@ type ChangeKind = NoteChange['kind'];
 const KIND_ORDER: readonly ChangeKind[] = ['moved', 'added', 'modified', 'removed'];
 
 export const CHANGE_KIND_LABELS: Record<ChangeKind, string> = { moved: '迁移', added: '新增', modified: '修改', removed: '删除' };
-export const CHANGE_TONES: Record<ChangeKind, Tone> = { moved: 'purple', added: 'emerald', modified: 'blue', removed: 'rose' };
 
 function make(project: ProjectMeta, at: number, body: NotificationBody): AppNotification {
   return {
@@ -45,7 +43,10 @@ export function toNotifications(
 ): DeriveResult {
   if (event.name === 'project-error') {
     const { id, reason, at } = event.data;
-    if (!prevMeta || prevMeta.hidden || lastErrors.get(id) === reason) return { notifications: [], lastErrors };
+    // prevMeta.error 是服务端记下的同一原因：刷新页面或新开标签页后内存里的 lastErrors 为空，靠它去重
+    if (!prevMeta || prevMeta.hidden || prevMeta.error === reason || lastErrors.get(id) === reason) {
+      return { notifications: [], lastErrors };
+    }
     return { notifications: [make(prevMeta, at, { type: 'error', reason })], lastErrors: new Map(lastErrors).set(id, reason) };
   }
 
@@ -106,7 +107,9 @@ export function groupByDay(items: readonly AppNotification[], now: number): [Day
   const groups = new Map<DayGroup, AppNotification[]>();
   for (const n of items) {
     const label = dayGroup(n.at, now);
-    groups.set(label, [...(groups.get(label) ?? []), n]);
+    const list = groups.get(label);
+    if (list) list.push(n);
+    else groups.set(label, [n]);
   }
   return (['今天', '昨天', '更早'] as const).flatMap((label): [DayGroup, AppNotification[]][] => {
     const list = groups.get(label);

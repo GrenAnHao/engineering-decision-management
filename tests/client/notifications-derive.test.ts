@@ -104,6 +104,20 @@ describe('toNotifications', () => {
     expect(toNotifications(errored('又坏了', 3000), meta(), first.lastErrors).notifications).toHaveLength(1);
   });
 
+  test('prevMeta.error 与本次原因相同时不通知（刷新页面后 lastErrors 为空也一样）', () => {
+    const known = meta({ healthy: false, watchMode: 'manual', error: '坏了' });
+    expect(toNotifications(errored('坏了'), known, NO_ERRORS).notifications).toEqual([]);
+    expect(toNotifications(errored('又坏了'), known, NO_ERRORS).notifications).toHaveLength(1);
+  });
+
+  test('错误 → 恢复 → 同一原因再出错，第二次也会通知', () => {
+    const first = toNotifications(errored('坏了'), meta(), NO_ERRORS);
+    const broken = meta({ healthy: false, watchMode: 'manual' });
+    const recovered = toNotifications(updated(meta(), undefined, 2500), broken, first.lastErrors);
+    expect(recovered.notifications.map((n) => n.body.type)).toEqual(['recovered']);
+    expect(toNotifications(errored('坏了', 3000), meta(), recovered.lastErrors).notifications).toHaveLength(1);
+  });
+
   test('前端还不认识的项目报异常时不通知', () => {
     expect(toNotifications(errored('坏了'), undefined, NO_ERRORS).notifications).toEqual([]);
   });

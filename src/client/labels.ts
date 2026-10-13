@@ -1,4 +1,4 @@
-import type { Lifecycle } from '../shared/types';
+import type { Lifecycle, NoteChange } from '../shared/types';
 import type { ThemePreference } from './theme';
 import type { Tone } from './ui/Badge';
 
@@ -69,3 +69,6 @@ const PALETTE = ['#7C3AED', '#1D4ED8', '#0D9488', '#D97706', '#DC2626', '#0891B2
 export function projectColor(order: number): string {
   return PALETTE[order % PALETTE.length]!;
 }
+
+/** 变更动作的徽标色（文案在 notifications/derive.ts） */
+export const CHANGE_TONES: Record<NoteChange['kind'], Tone> = { moved: 'purple', added: 'emerald', modified: 'blue', removed: 'rose' };
