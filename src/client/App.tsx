@@ -11,6 +11,7 @@ import { THEME_ICONS, VIEW_ICONS } from './icons';
 import { THEME_KEYWORDS, THEME_LABELS } from './labels';
 import { clearNotifications, dismissNotification, useNotifications } from './notifications/store';
 import type { AppNotification } from './notifications/types';
+import { notificationTarget } from './notifications/target';
 import { useNotificationCenter } from './notifications/useNotificationCenter';
 import { formatHash, normalizeRoute, VIEW_LABELS, VIEWS, type Route } from './router';
 import { useFullscreen } from './state/useFullscreen';
@@ -117,13 +118,16 @@ function Shell() {
 
   /** 点通知：项目已被移除时提示；否则切到该项目（保持当前视图），带笔记 id 时直接打开 */
   function openNotification(n: AppNotification, noteId: string | null) {
-    if (!hub.projects.some((p) => p.id === n.projectId)) {
-      toast({ kind: 'info', message: `项目「${n.projectName}」已移除` });
-      return;
-    }
+    const target = notificationTarget(n, noteId, hub.projects.map((p) => p.id), route?.view ?? 'baseline');
+    if (target.kind === 'removed') return toast({ kind: 'info', message: target.message });
     setQuery('');
-    navigate({ projectId: n.projectId, view: route?.view ?? 'baseline', note: noteId });
+    navigate(target.route);
   }
+
+  // 抽屉互斥兜底：openNote 已在同一批更新里收起通知抽屉；这里兜住其他改 hash 打开笔记的途径
+  useEffect(() => {
+    if (route?.note) closeNotifications();
+  }, [route?.note, closeNotifications]);
 
   const actions: ProjectActions = {
     onSelect: selectProject,

@@ -36,6 +36,18 @@ function upsert(projects: ProjectMeta[], next: ProjectMeta): ProjectMeta[] {
   return projects.some((p) => p.id === next.id) ? projects.map((p) => (p.id === next.id ? next : p)) : [...projects, next];
 }
 
+/**
+ * 合并一次 /api/config 的响应：请求发出之后又收到过 project-updated 的项目（isNewer 为真），
+ * 内存里的 meta 比响应新，保留内存版本；其余以响应为准（含增删）。
+ */
+export function mergeFetchedProjects(
+  fetched: readonly ProjectMeta[],
+  current: readonly ProjectMeta[],
+  isNewer: (id: string) => boolean,
+): ProjectMeta[] {
+  return fetched.map((p) => (isNewer(p.id) ? (current.find((q) => q.id === p.id) ?? p) : p));
+}
+
 function parse<T>(event: Event): T | null {
   try {
     return JSON.parse((event as MessageEvent<string>).data) as T;
@@ -54,32 +66,53 @@ function parse<T>(event: Event): T | null {
 export function useHub(onNotify?: (items: readonly AppNotification[]) => void): HubState & { refreshConfig: () => Promise<void> } {
   const [state, setState] = useState<HubState>(INITIAL);
 
-  /** 事件到达时用来取「变化前」的项目元数据；事件回调里同步更新，连续两条事件也不会拿到旧值 */
+  /**
+   * 项目清单的唯一写入源：每次改清单都先在事件回调里同步算出新数组写进 ref，再把同一个数组 set 进 state。
+   * 所有写 projects 的地方都走 commitProjects、都不从 s.projects 推导，所以入队顺序 = ref 写入顺序，
+   * 最后生效的 state.projects 一定等于 ref；连续两条事件之间还没渲染时，取「变化前」的 meta 也不会拿到旧值。
+   */
   const projectsRef = useRef<ProjectMeta[]>([]);
+  /** 递增的 project-updated 序号，以及每个项目最近一次 updated 的序号：用来判断 refresh 响应是否比内存旧 */
+  const updateSeqRef = useRef(0);
+  const updatedAtSeqRef = useRef(new Map<string, number>());
   const lastErrorsRef = useRef<ReadonlyMap<string, string>>(new Map());
   const onNotifyRef = useRef(onNotify);
   useEffect(() => {
     onNotifyRef.current = onNotify;
   });
-  useEffect(() => {
-    projectsRef.current = state.projects;
-  }, [state.projects]);
+
+  const commitProjects = useCallback((projects: ProjectMeta[], patch: (s: HubState) => Partial<HubState> = () => ({})) => {
+    projectsRef.current = projects;
+    setState((s) => ({ ...s, ...patch(s), projects }));
+  }, []);
 
   const notify = useCallback((event: HubNotifyEvent) => {
-    const prev = projectsRef.current.find((p) => p.id === event.data.id);
-    const result = toNotifications(event, prev, lastErrorsRef.current);
-    lastErrorsRef.current = result.lastErrors;
-    if (result.notifications.length > 0) onNotifyRef.current?.(result.notifications);
+    // 通知只是附带功能：这里出错不能拦住后面的清单更新
+    try {
+      const prev = projectsRef.current.find((p) => p.id === event.data.id);
+      const result = toNotifications(event, prev, lastErrorsRef.current);
+      lastErrorsRef.current = result.lastErrors;
+      if (result.notifications.length > 0) onNotifyRef.current?.(result.notifications);
+    } catch (err) {
+      console.error('变更通知处理失败', err);
+    }
   }, []);
 
   const refreshConfig = useCallback(async () => {
+    // 用序号而不是「开始时清空集合」：多个 refresh 重叠时，后发的不会抹掉先发那次期间记下的更新
+    const startedAt = updateSeqRef.current;
     try {
       const config = await api.config();
-      setState((s) => ({ ...s, loaded: true, loadError: null, projects: config.projects, configError: config.configError }));
+      const isNewer = (id: string) => (updatedAtSeqRef.current.get(id) ?? 0) > startedAt;
+      commitProjects(mergeFetchedProjects(config.projects, projectsRef.current, isNewer), () => ({
+        loaded: true,
+        loadError: null,
+        configError: config.configError,
+      }));
     } catch (err) {
       setState((s) => ({ ...s, loadError: (err as Error).message }));
     }
-  }, []);
+  }, [commitProjects]);
 
   useEffect(() => {
     void refreshConfig();
@@ -113,16 +146,15 @@ export function useHub(onNotify?: (items: readonly AppNotification[]) => void): 
         const data = parse<ProjectUpdatedEvent>(event);
         if (!data) return void refreshConfig();
         notify({ name: 'project-updated', data });
-        projectsRef.current = upsert(projectsRef.current, data.project);
-        setState((s) => ({
-          ...s,
-          projects: upsert(s.projects, data.project),
+        updateSeqRef.current += 1;
+        updatedAtSeqRef.current.set(data.id, updateSeqRef.current);
+        commitProjects(upsert(projectsRef.current, data.project), (s) => ({
           versions: { ...s.versions, [data.id]: (s.versions[data.id] ?? 0) + 1 },
         }));
       });
       es.addEventListener('config-changed', (event) => {
         const data = parse<ConfigChangedEvent>(event);
-        if (data) setState((s) => ({ ...s, projects: data.projects }));
+        if (data) commitProjects(data.projects);
         // 事件不带 configError，补拉一次以同步配置文件错误提示
         void refreshConfig();
       });
@@ -147,7 +179,7 @@ export function useHub(onNotify?: (items: readonly AppNotification[]) => void): 
       source?.close();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [refreshConfig, notify]);
+  }, [refreshConfig, notify, commitProjects]);
 
   return { ...state, refreshConfig };
 }

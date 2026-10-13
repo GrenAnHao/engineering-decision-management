@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { showDesktopNotification } from './desktop';
 import { markAllRead, pushNotifications } from './store';
+import { enqueueToasts, routeIncoming } from './toastQueue';
 import type { AppNotification } from './types';
 
 export type OpenNotification = (notification: AppNotification, noteId: string | null) => void;
@@ -18,23 +19,8 @@ export type NotificationCenter = {
   activate: OpenNotification;
 };
 
-/** 同时显示的弹出卡片数；其余排队。队列策略放在这一层，NotificationStack 反向引用 */
-export const MAX_VISIBLE_TOASTS = 3;
-/** 队列上限（含正在显示的）：页面开着但人不在时，回来不至于被几十张卡片轮番轰炸 */
-export const MAX_QUEUED_TOASTS = 10;
-
-/** 新卡片入队；超出上限时丢弃排队中最旧的，正在显示的前几张保留 */
-export function enqueueToasts(queue: readonly AppNotification[], incoming: readonly AppNotification[]): AppNotification[] {
-  const known = new Set(queue.map((n) => n.id));
-  const next = [...queue, ...incoming.filter((n) => !known.has(n.id))];
-  if (next.length <= MAX_QUEUED_TOASTS) return next;
-  const visible = next.slice(0, MAX_VISIBLE_TOASTS);
-  return [...visible, ...next.slice(MAX_VISIBLE_TOASTS).slice(-(MAX_QUEUED_TOASTS - MAX_VISIBLE_TOASTS))];
-}
-
 /**
- * 变更通知的前端调度：通知抽屉开关、右上角弹出队列，以及新通知到达时的分流
- * （抽屉开着 → 直接已读；页面在后台 → 系统通知；否则 → 弹卡片）。
+ * 变更通知的前端调度：通知抽屉开关、右上角弹出队列，以及新通知到达时的分流（规则见 toastQueue.routeIncoming）。
  */
 export function useNotificationCenter(onOpen: OpenNotification): NotificationCenter {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -72,12 +58,16 @@ export function useNotificationCenter(onOpen: OpenNotification): NotificationCen
     (items: readonly AppNotification[]) => {
       // fresh 只说明「谁先写进存储」，多个标签页之间是竞态，所以只拿它门控系统通知
       const fresh = pushNotifications(items);
-      if (drawerOpenRef.current) return markAllRead(); // 抽屉开着，新通知直接出现在列表里
-      if (document.visibilityState === 'hidden') {
-        for (const n of fresh) showDesktopNotification(n, () => activate(n, null));
-        return;
+      switch (routeIncoming({ drawerOpen: drawerOpenRef.current, hidden: document.visibilityState === 'hidden' })) {
+        case 'desktop':
+          for (const n of fresh) showDesktopNotification(n, () => activate(n, null));
+          return;
+        case 'read':
+          markAllRead(); // 抽屉开着且人在看，新通知直接出现在列表里
+          return;
+        case 'toast':
+          setToasts((list) => enqueueToasts(list, items));
       }
-      setToasts((list) => enqueueToasts(list, items));
     },
     [activate],
   );

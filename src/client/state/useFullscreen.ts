@@ -8,6 +8,9 @@ function subscribe(listener: () => void): () => void {
   return () => document.removeEventListener('fullscreenchange', listener);
 }
 
+/** 页面加载后不会变；SSR / 测试环境没有 document 时视为不支持 */
+const SUPPORTED = typeof document !== 'undefined' && document.fullscreenEnabled === true;
+
 // 用 != null：不支持 Fullscreen API 的浏览器里 fullscreenElement 是 undefined，不能当成「已全屏」
 const isActive = () => document.fullscreenElement != null;
 
@@ -18,11 +21,11 @@ const isActive = () => document.fullscreenElement != null;
 export function useFullscreen(): FullscreenControl {
   const { toast } = useDialogs();
   const active = useSyncExternalStore(subscribe, isActive, () => false);
-  const supported = typeof document !== 'undefined' && document.fullscreenEnabled === true;
   const toggle = useCallback(() => {
-    const action = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    if (!SUPPORTED) return;
+    const action = isActive() ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     action.catch((err: unknown) => toast({ kind: 'error', message: `无法切换全屏：${err instanceof Error ? err.message : String(err)}` }));
   }, [toast]);
   // 返回稳定对象：App 把它放进命令列表 useMemo 的依赖里，每次渲染都换新对象会让 memo 失效
-  return useMemo(() => ({ supported, active, toggle }), [supported, active, toggle]);
+  return useMemo(() => ({ supported: SUPPORTED, active, toggle }), [active, toggle]);
 }
