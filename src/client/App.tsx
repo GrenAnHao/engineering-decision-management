@@ -1,24 +1,24 @@
-import { Folder, FolderPlus, Palette, RefreshCw, ServerOff, WifiOff } from 'lucide-react';
+import { Folder, FolderPlus, RefreshCw, ServerOff, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommandPalette, type PaletteCommand } from './components/CommandPalette';
 import { NoteDrawer } from './components/NoteDrawer';
 import { ProjectRail, sortProjects, type ProjectActions } from './components/ProjectRail';
 import { TopBar } from './components/TopBar';
 import { findNote } from './derive';
-import { VIEW_ICONS } from './icons';
+import { THEME_ICONS, VIEW_ICONS } from './icons';
+import { THEME_LABELS } from './labels';
 import { formatHash, normalizeRoute, VIEW_LABELS, VIEWS, type Route } from './router';
 import { useHashRoute } from './state/useHashRoute';
 import { useHub } from './state/useHub';
 import { useProjectMutations } from './state/useProjectMutations';
 import { useProjectNotes } from './state/useProjectNotes';
-import { useTheme } from './theme';
+import { THEME_PREFERENCES, useTheme } from './theme';
 import { Banner } from './ui/Banner';
 import { DialogProvider } from './ui/dialogs';
 import { DashboardSkeleton, EmptyState } from './ui/State';
 import { Workspace } from './views/Workspace';
 
 const EMPTY_IN_COUNT: Readonly<Record<string, number>> = {};
-const THEME_NAMES = { system: '跟随系统', light: '浅色', dark: '深色' } as const;
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -28,7 +28,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 function Shell() {
   const hub = useHub();
   const mutations = useProjectMutations();
-  const { preference: theme, cycle: cycleTheme } = useTheme();
+  const { preference: theme, setPreference: setTheme } = useTheme();
   const [parsed, navigate] = useHashRoute();
   const [query, setQuery] = useState('');
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -133,17 +133,17 @@ function Shell() {
       ...(project
         ? [{ id: 'rescan', group: '操作', label: `重新扫描「${project.displayName}」`, icon: RefreshCw, keywords: 'rescan refresh 刷新', run: () => rescan(project.id) }]
         : []),
-      {
-        id: 'theme',
-        group: '操作',
-        label: '切换主题',
-        hint: `当前：${THEME_NAMES[theme]}`,
-        icon: Palette,
-        keywords: 'theme dark light 深色 浅色',
-        run: cycleTheme,
-      },
+      ...THEME_PREFERENCES.map((p) => ({
+        id: `theme:${p}`,
+        group: '外观',
+        label: `主题：${THEME_LABELS[p]}`,
+        hint: p === theme ? '当前' : undefined,
+        icon: THEME_ICONS[p],
+        keywords: 'theme dark light 主题 深色 浅色 跟随系统',
+        run: () => setTheme(p),
+      })),
     ],
-    [route, visibleProjects, project, theme, go, selectProject, mutations, rescan, cycleTheme],
+    [route, visibleProjects, project, theme, go, selectProject, mutations, rescan, setTheme],
   );
 
   return (
@@ -158,7 +158,7 @@ function Shell() {
         onRescan={rescan}
         onOpenPalette={() => setPaletteOpen(true)}
         onToggleRail={() => setRailOpen((open) => !open)}
-        onCycleTheme={cycleTheme}
+        onThemeChange={setTheme}
       />
       <div className="flex">
         <ProjectRail

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { nextPreference, readPreference, resolveTheme, writePreference } from '../../src/client/theme';
+import { readPreference, resolveTheme, THEME_PREFERENCES, writePreference } from '../../src/client/theme';
 
 const realStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
 
@@ -33,10 +33,8 @@ test('跟随系统时取系统主题；显式选择不受系统影响', () => {
   expect(resolveTheme('dark', false)).toBe('dark');
 });
 
-test('偏好按 跟随系统 → 浅色 → 深色 轮换并回到起点', () => {
-  expect(nextPreference('system')).toBe('light');
-  expect(nextPreference('light')).toBe('dark');
-  expect(nextPreference('dark')).toBe('system');
+test('三个主题选项按 跟随系统 / 浅色 / 深色 排列', () => {
+  expect(THEME_PREFERENCES).toEqual(['system', 'light', 'dark']);
 });
 
 test('偏好写入 localStorage 并读回；选「跟随系统」时删除该项', () => {

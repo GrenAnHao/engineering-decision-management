@@ -1,12 +1,13 @@
-import { Menu, Monitor, Moon, RefreshCw, Search, Sun } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Menu, RefreshCw, Search } from 'lucide-react';
 import type { ProjectMeta } from '../../shared/types';
-import { VIEW_ICONS } from '../icons';
+import { THEME_ICONS, VIEW_ICONS } from '../icons';
+import { THEME_LABELS } from '../labels';
 import { VIEW_LABELS, VIEWS, type ViewId } from '../router';
 import type { SyncStatus } from '../state/useHub';
-import type { ThemePreference } from '../theme';
+import { THEME_PREFERENCES, type ThemePreference } from '../theme';
 import { Button } from '../ui/Button';
 import { Kbd, MOD_KEY_LABEL } from '../ui/Kbd';
+import { SegmentedControl, type SegmentOption } from '../ui/SegmentedControl';
 import { cn } from '../ui/tw';
 
 export type TopBarProps = {
@@ -20,69 +21,15 @@ export type TopBarProps = {
   onRescan: (projectId: string) => void;
   onOpenPalette: () => void;
   onToggleRail: () => void;
-  onCycleTheme: () => void;
+  onThemeChange: (theme: ThemePreference) => void;
 };
 
-const THEME_META: Record<ThemePreference, { icon: typeof Sun; label: string }> = {
-  system: { icon: Monitor, label: '跟随系统' },
-  light: { icon: Sun, label: '浅色' },
-  dark: { icon: Moon, label: '深色' },
-};
-
-/** 视图切换：一块滑动的底板跟随当前标签，宽度随标签文字变化 */
-function ViewTabs({ view, onViewChange }: Pick<TopBarProps, 'view' | 'onViewChange'>) {
-  const listRef = useRef<HTMLElement>(null);
-  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const measure = () => {
-      const active = list.querySelector<HTMLElement>('[aria-current="page"]');
-      if (active) setPill({ left: active.offsetLeft, width: active.offsetWidth });
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(list);
-    return () => observer.disconnect();
-  }, [view]);
-
-  return (
-    <nav
-      ref={listRef}
-      aria-label="视图"
-      className="relative flex shrink-0 rounded-[10px] bg-surface-2 p-0.5 ring-1 ring-line ring-inset"
-    >
-      {pill && (
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-0.5 left-0 rounded-lg bg-surface shadow-raised ring-1 ring-line transition-[transform,width] duration-300 ease-out"
-          style={{ width: pill.width, transform: `translateX(${pill.left}px)` }}
-        />
-      )}
-      {VIEWS.map((v) => {
-        const Icon = VIEW_ICONS[v];
-        const active = v === view;
-        return (
-          <button
-            key={v}
-            type="button"
-            aria-current={active ? 'page' : undefined}
-            title={VIEW_LABELS[v]}
-            onClick={() => onViewChange(v)}
-            className={cn(
-              'relative z-10 inline-flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold whitespace-nowrap transition-colors',
-              active ? 'text-fg' : 'text-fg-muted hover:text-fg',
-            )}
-          >
-            <Icon aria-hidden="true" className={cn('size-4 transition-colors', active && 'text-accent-text')} />
-            <span className="max-lg:sr-only">{VIEW_LABELS[v]}</span>
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
+const VIEW_OPTIONS: readonly SegmentOption<ViewId>[] = VIEWS.map((v) => ({ value: v, label: VIEW_LABELS[v], icon: VIEW_ICONS[v] }));
+const THEME_OPTIONS: readonly SegmentOption<ThemePreference>[] = THEME_PREFERENCES.map((p) => ({
+  value: p,
+  label: THEME_LABELS[p],
+  icon: THEME_ICONS[p],
+}));
 
 /** 同步状态：一切正常时不显示，只在连接异常、降级或需要手动操作时出现 */
 function SyncBeacon({ project, status, onRescan }: Pick<TopBarProps, 'project' | 'status' | 'onRescan'>) {
@@ -121,8 +68,7 @@ function SyncBeacon({ project, status, onRescan }: Pick<TopBarProps, 'project' |
 }
 
 export function TopBar(props: TopBarProps) {
-  const { project, view, theme, railOpen, onViewChange, onOpenPalette, onToggleRail, onCycleTheme } = props;
-  const { icon: ThemeIcon, label: themeLabel } = THEME_META[theme];
+  const { project, view, theme, railOpen, onViewChange, onOpenPalette, onToggleRail, onThemeChange } = props;
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-line bg-surface/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-6">
       <Button
@@ -159,7 +105,7 @@ export function TopBar(props: TopBarProps) {
         )}
       </div>
 
-      <ViewTabs view={view} onViewChange={onViewChange} />
+      <SegmentedControl mode="nav" label="视图" value={view} options={VIEW_OPTIONS} onChange={onViewChange} iconOnly="below-lg" />
 
       <div className="flex-1" />
 
@@ -174,16 +120,7 @@ export function TopBar(props: TopBarProps) {
         <Kbd className="hidden md:inline-flex">{MOD_KEY_LABEL} K</Kbd>
       </button>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="max-sm:hidden"
-        title={`主题：${themeLabel}（点击切换）`}
-        aria-label={`主题：${themeLabel}，点击切换`}
-        onClick={onCycleTheme}
-      >
-        <ThemeIcon aria-hidden="true" />
-      </Button>
+      <SegmentedControl mode="radio" label="主题" value={theme} options={THEME_OPTIONS} onChange={onThemeChange} iconOnly className="max-sm:hidden" />
 
       <SyncBeacon project={props.project} status={props.status} onRescan={props.onRescan} />
     </header>

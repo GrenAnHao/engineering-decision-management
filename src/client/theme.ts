@@ -1,10 +1,11 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type ResolvedTheme = 'light' | 'dark';
 
 const STORAGE_KEY = 'edm-theme';
-const ORDER: readonly ThemePreference[] = ['system', 'light', 'dark'];
+/** 顶栏分段与命令面板的排列顺序 */
+export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
 
 const listeners = new Set<() => void>();
 const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
@@ -33,11 +34,6 @@ export function writePreference(next: ThemePreference): void {
   } catch {
     memoryPreference = next;
   }
-}
-
-/** 跟随系统 → 浅色 → 深色 → 跟随系统 */
-export function nextPreference(current: ThemePreference): ThemePreference {
-  return ORDER[(ORDER.indexOf(current) + 1) % ORDER.length]!;
 }
 
 export function resolveTheme(preference: ThemePreference, systemDark: boolean): ResolvedTheme {
@@ -75,17 +71,15 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+export function setPreference(next: ThemePreference): void {
+  writePreference(next);
+  emit();
+}
+
 export function useTheme(): {
   preference: ThemePreference;
-  /** 在 跟随系统 → 浅色 → 深色 之间轮换 */
-  cycle: () => void;
+  setPreference: (next: ThemePreference) => void;
 } {
   const preference = useSyncExternalStore(subscribe, readPreference, () => 'system' as const);
-
-  const cycle = useCallback(() => {
-    writePreference(nextPreference(readPreference()));
-    emit();
-  }, []);
-
-  return { preference, cycle };
+  return { preference, setPreference };
 }

@@ -1,4 +1,5 @@
 import type { Lifecycle } from '../shared/types';
+import type { ThemePreference } from './theme';
 import type { Tone } from './ui/Badge';
 
 export const STATUS_LABELS: Record<Lifecycle, string> = {
@@ -6,6 +7,12 @@ export const STATUS_LABELS: Record<Lifecycle, string> = {
   proposed: '待评审',
   rejected: '已否决',
   archived: '已归档',
+};
+
+export const THEME_LABELS: Record<ThemePreference, string> = {
+  system: '跟随系统',
+  light: '浅色',
+  dark: '深色',
 };
 
 const CLASS_LABELS: Record<string, string> = {
