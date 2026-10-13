@@ -4,6 +4,8 @@ import type { NoteChange } from '../../src/shared/types';
 import { NotificationBell, unreadBadge } from '../../src/client/components/NotificationBell';
 import { NotificationCard } from '../../src/client/components/NotificationCard';
 import { NotificationDrawer } from '../../src/client/components/NotificationDrawer';
+import { NotificationStack } from '../../src/client/components/NotificationStack';
+import { projectColor } from '../../src/client/labels';
 import type { AppNotification } from '../../src/client/notifications/types';
 
 const noop = () => {};
@@ -44,7 +46,7 @@ test('toast：超过 3 处时只列前 3 处并汇总剩余，带倒计时条', 
   expect(html).toContain('另有 1 处修改、1 处删除');
   expect(html).not.toContain('>Y<');
   expect(html).toContain('animate-toast-timer');
-  expect(html).toContain('aria-label="收起"');
+  expect(html).toContain('aria-label="收起：工程决策中心"');
   expect(html).toContain('5 处变更 · 刚刚');
 });
 
@@ -54,7 +56,11 @@ test('drawer：超过 3 处时有「展开全部」，未读带「新」，清�
   expect(html).toContain('展开全部 4 处');
   expect(html).toContain('aria-expanded="false"');
   expect(html).toContain('>新<');
-  expect(html).toContain('aria-label="清除通知"');
+  // 展开按钮指向变更行列表的容器
+  const controls = /aria-controls="([^"]+)"/.exec(html)?.[1];
+  expect(controls).toBeTruthy();
+  expect(html).toContain(`id="${controls}"`);
+  expect(html).toContain('aria-label="清除通知：工程决策中心"');
   expect(render(notification({ type: 'changes', changes }, { read: true }), 'drawer')).not.toContain('>新<');
 });
 
@@ -67,7 +73,7 @@ test('异常与已恢复', () => {
 
 test('卡片带项目色变量与可访问名称', () => {
   const html = render(notification({ type: 'changes', changes: [change('added', 'A')] }), 'drawer');
-  expect(html).toContain('--project:#1D4ED8'); // projectColor(1)
+  expect(html).toContain(`--project:${projectColor(1)}`);
   expect(html).toContain('aria-label="工程决策中心：新增 1：A"');
 });
 
@@ -95,4 +101,17 @@ test('通知抽屉：模态对话框、标题、条数；为空时禁用全部�
   expect(html).toContain('2 条');
   expect(html).toContain('今天');
   expect(html).toContain('更早');
+});
+
+test('弹出栈：live 区域只放一句摘要，卡片在另一个不带 aria-live 的容器里；最多显示 3 张', () => {
+  const items = ['a', 'b', 'c', 'd'].map((id) => notification({ type: 'changes', changes: [change('added', id)] }, { id }));
+  const html = renderToStaticMarkup(<NotificationStack items={items} onDismiss={noop} onOpenProject={noop} onOpenNote={noop} />);
+  const live = /<div[^>]*aria-live="polite"[^>]*>(.*?)<\/div>/.exec(html);
+  expect(live?.[0]).toContain('sr-only');
+  expect(live?.[1]).toContain('<p>工程决策中心：新增 1：a</p>');
+  expect(live?.[1]).not.toContain('<article');
+  expect(html.match(/aria-live=/g)?.length).toBe(1);
+  expect(html.match(/<article/g)?.length).toBe(3);
+  const empty = renderToStaticMarkup(<NotificationStack items={[]} onDismiss={noop} onOpenProject={noop} onOpenNote={noop} />);
+  expect(empty).toContain('aria-live="polite"');
 });

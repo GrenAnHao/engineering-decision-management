@@ -1,5 +1,5 @@
 import { ChevronDown, X } from 'lucide-react';
-import { useState, type CSSProperties } from 'react';
+import { useId, useState, type CSSProperties } from 'react';
 import type { NoteChange } from '../../shared/types';
 import { clockTime } from '../format';
 import { CHANGE_TONES, projectColor } from '../labels';
@@ -68,6 +68,7 @@ function headerMeta(n: AppNotification, variant: NotificationCardProps['variant'
 /** 通知卡片：左侧项目色条 + 淡项目色页眉（项目色走 CSS 变量，属于设计规范允许的动态值） */
 export function NotificationCard({ notification: n, variant, onOpenProject, onOpenNote, onDismiss, paused = false, now = Date.now() }: NotificationCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   const changes = n.body.type === 'changes' ? n.body.changes : [];
   const visible = variant === 'drawer' && expanded ? changes : changes.slice(0, PREVIEW_ROWS);
   const remainder = variant === 'toast' ? remainderText(changes, PREVIEW_ROWS) : null;
@@ -92,7 +93,7 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
         <span className="tabular ml-auto shrink-0 font-mono text-2xs text-fg-subtle">{headerMeta(n, variant, now)}</span>
         <button
           type="button"
-          aria-label={variant === 'toast' ? '收起' : '清除通知'}
+          aria-label={variant === 'toast' ? `收起：${n.projectName}` : `清除通知：${n.projectName}`}
           title={variant === 'toast' ? '收起' : '清除'}
           onClick={() => onDismiss(n.id)}
           className="grid size-6 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
@@ -104,14 +105,17 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
       <div className="py-1.5 pr-2 pl-3">
         {n.body.type === 'error' && <StatusRow tone="amber" label="异常" text={n.body.reason} />}
         {n.body.type === 'recovered' && <StatusRow tone="emerald" label="已恢复" text="实时监听已恢复" />}
-        {visible.map((c) => (
-          <ChangeRow key={`${c.kind}:${c.id}`} change={c} onOpen={() => onOpenNote(n, c.id)} />
-        ))}
+        <div id={listId}>
+          {visible.map((c) => (
+            <ChangeRow key={`${c.kind}:${c.id}`} change={c} onOpen={() => onOpenNote(n, c.id)} />
+          ))}
+        </div>
         {remainder && <p className="px-1.5 pt-0.5 pb-1 text-xs text-fg-subtle">{remainder}</p>}
         {canExpand && (
           <button
             type="button"
             aria-expanded={expanded}
+            aria-controls={listId}
             onClick={() => setExpanded((v) => !v)}
             className="mt-0.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-accent-text transition-colors hover:bg-accent-soft"
           >
@@ -124,7 +128,7 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
       {variant === 'toast' && (
         <span
           aria-hidden="true"
-          className={cn('absolute inset-x-0 bottom-0 h-0.5 origin-left animate-toast-timer bg-(--project)/60', paused && '[animation-play-state:paused]')}
+          className={cn('absolute inset-x-0 bottom-0 h-0.5 origin-left animate-toast-timer bg-(--project)/60 motion-reduce:hidden', paused && '[animation-play-state:paused]')}
         />
       )}
     </article>

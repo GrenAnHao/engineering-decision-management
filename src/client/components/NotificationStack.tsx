@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type FocusEvent } from 'react';
+import { useEffect, useState, type FocusEvent } from 'react';
+import { createCountdown } from '../notifications/countdown';
+import { notificationText } from '../notifications/derive';
 import type { AppNotification } from '../notifications/types';
 import { NotificationCard } from './NotificationCard';
 
@@ -16,31 +18,33 @@ export type NotificationStackProps = {
 
 type TimedToastProps = Omit<NotificationStackProps, 'items'> & { notification: AppNotification };
 
-/** 一张带倒计时的卡片：鼠标停留或焦点在卡片内时暂停，离开后按剩余时间继续 */
+/** 一张带倒计时的卡片：鼠标停留或焦点在卡片内时暂停（两者分开记，任一成立就暂停），离开后按剩余时间继续 */
 function TimedToast({ notification, onDismiss, onOpenProject, onOpenNote }: TimedToastProps) {
-  const [paused, setPaused] = useState(false);
-  const remaining = useRef(TOAST_MS);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
+  const [countdown] = useState(() => createCountdown(TOAST_MS, Date.now()));
 
   useEffect(() => {
     if (paused) return;
-    const started = Date.now();
-    const timer = setTimeout(() => onDismiss(notification.id), remaining.current);
+    countdown.resume(Date.now());
+    const timer = setTimeout(() => onDismiss(notification.id), countdown.remaining(Date.now()));
     return () => {
       clearTimeout(timer);
-      remaining.current = Math.max(0, remaining.current - (Date.now() - started));
+      countdown.pause(Date.now());
     };
-  }, [paused, notification.id, onDismiss]);
+  }, [paused, countdown, notification.id, onDismiss]);
 
   const onBlur = (e: FocusEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
   };
 
   return (
     <div
       className="pointer-events-auto animate-slide-in-right"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
       onBlur={onBlur}
     >
       <NotificationCard
@@ -56,21 +60,24 @@ function TimedToast({ notification, onDismiss, onOpenProject, onOpenNote }: Time
 }
 
 /**
- * 右上角弹出栈（顶栏下方）。外层的 aria-live 区域始终存在，新增的卡片才会被读屏播报。
+ * 右上角弹出栈（顶栏下方）。读屏播报与卡片分开：live 区域常驻，只放每张卡片的一句摘要（sr-only），
+ * 否则插入整张 article 会把标题、每一行变更都读一遍；可交互的卡片放在另一个不带 aria-live 的容器里。
  * 与右下角的 Toaster（操作回执）分开：这里只放外部变更。
  */
 export function NotificationStack({ items, ...handlers }: NotificationStackProps) {
+  const visible = items.slice(0, MAX_VISIBLE_TOASTS);
   return (
-    <div
-      role="region"
-      aria-label="变更通知"
-      aria-live="polite"
-      aria-relevant="additions"
-      className="pointer-events-none fixed top-16 right-4 z-[60] flex w-[min(92vw,22rem)] flex-col gap-2"
-    >
-      {items.slice(0, MAX_VISIBLE_TOASTS).map((n) => (
-        <TimedToast key={n.id} notification={n} {...handlers} />
-      ))}
+    <div className="pointer-events-none fixed top-16 right-4 z-[60] w-[min(92vw,22rem)]">
+      <div role="status" aria-live="polite" aria-relevant="additions" className="sr-only">
+        {visible.map((n) => (
+          <p key={n.id}>{`${n.projectName}：${notificationText(n)}`}</p>
+        ))}
+      </div>
+      <div role="region" aria-label="变更通知" className="flex flex-col gap-2">
+        {visible.map((n) => (
+          <TimedToast key={n.id} notification={n} {...handlers} />
+        ))}
+      </div>
     </div>
   );
 }
