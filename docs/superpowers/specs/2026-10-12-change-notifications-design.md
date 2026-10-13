@@ -16,7 +16,7 @@
 |---|---|---|
 | 新增 | 笔记 id 只在新扫描结果里 | 新增（emerald） |
 | 修改 | 同 id，`hash` 变了 | 修改（blue） |
-| 状态迁移 | 新增与删除中，去掉首段生命周期目录后 id 相同的一对 | `待评审 → 已落地`（purple），文字取 `STATUS_LABELS` |
+| 状态迁移 | 同一篇笔记的 `lifecycle` 字段变了（原地改 `Status` 行，或换目录后配对上的同一篇） | `待评审 → 已落地`（purple），文字取 `STATUS_LABELS` |
 | 删除 | 笔记 id 只在旧扫描结果里 | 删除（rose），标题划线、不可点 |
 | 异常 | `project-error`（路径失效、监听不可用转手动刷新） | 异常（amber） |
 | 已恢复 | 项目从「不健康或手动刷新」回到「健康且实时监听」 | 已恢复（emerald） |
@@ -41,14 +41,17 @@ export type ProjectUpdatedEvent = {
 export type ProjectErrorEvent = { id: string; reason: string; at: number }; // 新增 at，前端据此生成确定性通知 id
 ```
 
-`moved` 的 `id` 是新 id（打开笔记用），`fromId` 是旧 id。
+`moved` 的 `id` 是新 id（打开笔记用），`fromId` 是旧 id（原地改 `Status` 时两者相同）。
+
+> `lifecycle` 取笔记的 `Status` 行，缺失时才按目录推断（`parser.ts`）；界面上的状态徽标和计数都用它，所以「状态迁移」以这个字段为准，而不是以目录为准。
 
 ### 2.2 `diffNotes(prev, next): NoteChange[]`（`src/server/store.ts`，纯函数）
 
 1. 按 id 分出三组：只在 `next` 的为新增，只在 `prev` 的为删除，两边都有但 `hash` 不同的为修改。
-2. 迁移配对：新增与删除两组里，id 去掉第一段（`implemented/…` → `…`）后相同的，各取出一条配成 `moved`；同一个去首段 id 有多个候选时（如 `proposed/x` 与 `rejected/x` 都被删除），按完整 id 码点序依次配对，剩下的仍记为新增或删除。迁移同时内容也改了，只记一条 `moved`。
-3. 输出顺序：moved → added → modified → removed；组内按 `title` 码点序，再按 `id`。结果稳定，便于测试。
-4. `title` 取对应那一侧笔记的标题（删除取旧的，其余取新的）。
+2. 同一 id 的笔记 `lifecycle` 变了，记为 `moved`（`id` 等于 `fromId`），不再另记修改。
+3. 跨目录配对：新增与删除两组里，id 去掉第一段（`implemented/…` → `…`）后相同的，各取出一条配成一对；同一个去首段 id 有多个候选时（如 `proposed/x` 与 `rejected/x` 都被删除），按完整 id 码点序依次配对，剩下的仍记为新增或删除。配成的一对如果 `lifecycle` 不同，记为 `moved`；相同（只换了目录、状态没变）记为 `modified`，id 取新的。
+4. 输出顺序：moved → added → modified → removed；组内按 `title` 码点序，再按 `id`。结果稳定，便于测试。
+5. `title` 取对应那一侧笔记的标题（删除取旧的，其余取新的）。
 
 ### 2.3 `hub.ts` 的 `scanNow`
 
