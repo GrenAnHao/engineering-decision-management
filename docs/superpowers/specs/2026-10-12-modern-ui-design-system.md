@@ -41,6 +41,8 @@
 | `Banner` + `BannerButton`（`tone`: amber / rose） | 行内提示条（更新提示、连接异常） |
 | `Kbd`、`MOD_KEY_LABEL` | 快捷键键帽 |
 | `Modal`、`useDialogs()` | 模态框、prompt / confirm / toast |
+| `SegmentedControl`（`mode`: nav / radio；`iconOnly`） | 滑动底板分段控件：视图切换（nav）、主题切换（radio，方向键移动）；`options` 须保持引用稳定 |
+| `Drawer`（`label` `labelledBy` `className`） | 右侧模态抽屉外壳：遮罩、焦点陷阱、Esc 关闭、焦点归还；子元素带 `data-autofocus` 的打开时获得焦点；宽度经 `className` 传入；同一时间只开一个 |
 
 参照实现：`views/BaselineView.tsx`、`components/KpiRow.tsx`、`components/TopBar.tsx`、`components/ProjectRail.tsx`、`components/CommandPalette.tsx`。
 
