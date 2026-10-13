@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { NoteChange } from '../../src/shared/types';
 import { NotificationBell, unreadBadge } from '../../src/client/components/NotificationBell';
 import { NotificationCard } from '../../src/client/components/NotificationCard';
+import { NotificationDrawer } from '../../src/client/components/NotificationDrawer';
 import type { AppNotification } from '../../src/client/notifications/types';
 
 const noop = () => {};
@@ -79,4 +80,19 @@ test('未读角标：0 不显示，超过 99 显示 99+', () => {
   expect(html).toContain('aria-label="通知，120 条未读"');
   expect(html).toContain('>99+<');
   expect(html).toContain('aria-expanded="true"');
+});
+
+test('通知抽屉：模态对话框、标题、条数；为空时禁用全部清除并显示空态', () => {
+  const props = { onClose: noop, onClearAll: noop, onDismiss: noop, onOpenProject: noop, onOpenNote: noop };
+  const empty = renderToStaticMarkup(<NotificationDrawer items={[]} {...props} />);
+  expect(empty).toContain('role="dialog"');
+  expect(empty).toContain('aria-labelledby="notification-drawer-title"');
+  expect(empty).toContain('暂无通知');
+  expect(empty).toMatch(/<button[^>]*disabled[^>]*>全部清除/);
+
+  const items = [notification({ type: 'recovered' }, { id: 'a' }), notification({ type: 'recovered' }, { id: 'b', at: 0 })];
+  const html = renderToStaticMarkup(<NotificationDrawer items={items} {...props} />);
+  expect(html).toContain('2 条');
+  expect(html).toContain('今天');
+  expect(html).toContain('更早');
 });
