@@ -1,14 +1,16 @@
-import { Menu, RefreshCw, Search } from 'lucide-react';
+import { Maximize, Menu, Minimize, RefreshCw, Search } from 'lucide-react';
 import type { ProjectMeta } from '../../shared/types';
 import { THEME_ICONS, VIEW_ICONS } from '../icons';
 import { THEME_LABELS } from '../labels';
 import { VIEW_LABELS, VIEWS, type ViewId } from '../router';
+import type { FullscreenControl } from '../state/useFullscreen';
 import type { SyncStatus } from '../state/useHub';
 import { THEME_PREFERENCES, type ThemePreference } from '../theme';
 import { Button } from '../ui/Button';
 import { Kbd, MOD_KEY_LABEL } from '../ui/Kbd';
 import { SegmentedControl, type SegmentOption } from '../ui/SegmentedControl';
 import { cn } from '../ui/tw';
+import { NotificationBell } from './NotificationBell';
 
 export type TopBarProps = {
   project: ProjectMeta | null;
@@ -22,6 +24,11 @@ export type TopBarProps = {
   onOpenPalette: () => void;
   onToggleRail: () => void;
   onThemeChange: (theme: ThemePreference) => void;
+  fullscreen: FullscreenControl;
+  /** 未读通知数，用于铃铛角标 */
+  unread: number;
+  notificationsOpen: boolean;
+  onOpenNotifications: () => void;
 };
 
 const VIEW_OPTIONS: readonly SegmentOption<ViewId>[] = VIEWS.map((v) => ({ value: v, label: VIEW_LABELS[v], icon: VIEW_ICONS[v] }));
@@ -68,7 +75,8 @@ function SyncBeacon({ project, status, onRescan }: Pick<TopBarProps, 'project' |
 }
 
 export function TopBar(props: TopBarProps) {
-  const { project, view, theme, railOpen, onViewChange, onOpenPalette, onToggleRail, onThemeChange } = props;
+  const { project, view, theme, railOpen, onViewChange, onOpenPalette, onToggleRail, onThemeChange, fullscreen, unread, notificationsOpen, onOpenNotifications } =
+    props;
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-line bg-surface/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-6">
       <Button
@@ -121,6 +129,22 @@ export function TopBar(props: TopBarProps) {
       </button>
 
       <SegmentedControl mode="radio" label="主题" value={theme} options={THEME_OPTIONS} onChange={onThemeChange} iconOnly className="max-sm:hidden" />
+
+      {fullscreen.supported && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="max-sm:hidden"
+          title={fullscreen.active ? '退出全屏' : '全屏'}
+          aria-label="全屏"
+          aria-pressed={fullscreen.active}
+          onClick={fullscreen.toggle}
+        >
+          {fullscreen.active ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
+        </Button>
+      )}
+
+      <NotificationBell unread={unread} open={notificationsOpen} onClick={onOpenNotifications} />
 
       <SyncBeacon project={props.project} status={props.status} onRescan={props.onRescan} />
     </header>

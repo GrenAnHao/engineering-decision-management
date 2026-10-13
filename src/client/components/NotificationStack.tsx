@@ -2,9 +2,9 @@ import { useEffect, useState, type FocusEvent } from 'react';
 import { createCountdown } from '../notifications/countdown';
 import { notificationLabel } from '../notifications/derive';
 import type { AppNotification } from '../notifications/types';
+import { MAX_VISIBLE_TOASTS } from '../notifications/useNotificationCenter';
 import { NotificationCard } from './NotificationCard';
 
-export const MAX_VISIBLE_TOASTS = 3;
 /** 每张卡片停留时长；与 styles/index.css 里 --animate-toast-timer 的 6s 一致 */
 export const TOAST_MS = 6000;
 

@@ -1,20 +1,26 @@
-import { Folder, FolderPlus, RefreshCw, ServerOff, WifiOff } from 'lucide-react';
+import { Folder, FolderPlus, Maximize, Minimize, RefreshCw, ServerOff, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommandPalette, type PaletteCommand } from './components/CommandPalette';
 import { NoteDrawer } from './components/NoteDrawer';
+import { NotificationDrawer } from './components/NotificationDrawer';
+import { NotificationStack } from './components/NotificationStack';
 import { ProjectRail, sortProjects, type ProjectActions } from './components/ProjectRail';
 import { TopBar } from './components/TopBar';
 import { findNote } from './derive';
 import { THEME_ICONS, VIEW_ICONS } from './icons';
 import { THEME_KEYWORDS, THEME_LABELS } from './labels';
+import { clearNotifications, dismissNotification, useNotifications } from './notifications/store';
+import type { AppNotification } from './notifications/types';
+import { useNotificationCenter } from './notifications/useNotificationCenter';
 import { formatHash, normalizeRoute, VIEW_LABELS, VIEWS, type Route } from './router';
+import { useFullscreen } from './state/useFullscreen';
 import { useHashRoute } from './state/useHashRoute';
 import { useHub } from './state/useHub';
 import { useProjectMutations } from './state/useProjectMutations';
 import { useProjectNotes } from './state/useProjectNotes';
 import { THEME_PREFERENCES, useTheme } from './theme';
 import { Banner } from './ui/Banner';
-import { DialogProvider } from './ui/dialogs';
+import { DialogProvider, useDialogs } from './ui/dialogs';
 import { DashboardSkeleton, EmptyState } from './ui/State';
 import { Workspace } from './views/Workspace';
 
@@ -26,7 +32,12 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function Shell() {
-  const hub = useHub();
+  const { toast } = useDialogs();
+  // openNotification 在下方声明（函数提升），用到的 hub / route 在调用时都已就绪
+  const center = useNotificationCenter((n, noteId) => openNotification(n, noteId));
+  const hub = useHub(center.receive);
+  const { items: notifications, unread } = useNotifications();
+  const fullscreen = useFullscreen();
   const mutations = useProjectMutations();
   const { preference: theme, setPreference: setTheme } = useTheme();
   const [parsed, navigate] = useHashRoute();
@@ -82,13 +93,16 @@ function Shell() {
   const inCount = notesState.data?.inCount ?? EMPTY_IN_COUNT;
 
   const go = useCallback((patch: Partial<Route>) => route && navigate({ ...route, ...patch }), [route, navigate]);
+  const { closeDrawer: closeNotifications } = center;
   const openNote = useCallback(
     (noteId: string) => {
       const note = notes ? findNote(notes, noteId) : undefined;
       const slugIsUnique = note && notes!.filter((n) => n.slug === note.slug).length === 1;
+      // 笔记抽屉与通知抽屉互斥：从命令面板（可在通知抽屉上方用 ⌘K 唤出）打开笔记时，同一批更新里先收起通知抽屉
+      closeNotifications();
       go({ note: note && slugIsUnique ? note.slug : noteId });
     },
-    [notes, go],
+    [notes, go, closeNotifications],
   );
   const closeNote = useCallback(() => go({ note: null }), [go]);
   const rescan = useCallback((id: string) => void mutations.rescan(id), [mutations]);
@@ -100,6 +114,16 @@ function Shell() {
     },
     [route, navigate],
   );
+
+  /** 点通知：项目已被移除时提示；否则切到该项目（保持当前视图），带笔记 id 时直接打开 */
+  function openNotification(n: AppNotification, noteId: string | null) {
+    if (!hub.projects.some((p) => p.id === n.projectId)) {
+      toast({ kind: 'info', message: `项目「${n.projectName}」已移除` });
+      return;
+    }
+    setQuery('');
+    navigate({ projectId: n.projectId, view: route?.view ?? 'baseline', note: noteId });
+  }
 
   const actions: ProjectActions = {
     onSelect: selectProject,
@@ -142,8 +166,20 @@ function Shell() {
         keywords: THEME_KEYWORDS[p],
         run: () => setTheme(p),
       })),
+      ...(fullscreen.supported
+        ? [
+            {
+              id: 'fullscreen',
+              group: '外观',
+              label: fullscreen.active ? '退出全屏' : '进入全屏',
+              icon: fullscreen.active ? Minimize : Maximize,
+              keywords: 'fullscreen 全屏',
+              run: fullscreen.toggle,
+            },
+          ]
+        : []),
     ],
-    [route, visibleProjects, project, theme, go, selectProject, mutations, rescan, setTheme],
+    [route, visibleProjects, project, theme, go, selectProject, mutations, rescan, setTheme, fullscreen],
   );
 
   return (
@@ -159,6 +195,10 @@ function Shell() {
         onOpenPalette={() => setPaletteOpen(true)}
         onToggleRail={() => setRailOpen((open) => !open)}
         onThemeChange={setTheme}
+        fullscreen={fullscreen}
+        unread={unread}
+        notificationsOpen={center.drawerOpen}
+        onOpenNotifications={center.openDrawer}
       />
       <div className="flex">
         <ProjectRail
@@ -209,6 +249,22 @@ function Shell() {
           </div>
         </main>
       </div>
+      <NotificationStack
+        items={center.toasts}
+        onDismiss={center.dismissToast}
+        onOpenProject={(n) => center.activate(n, null)}
+        onOpenNote={center.activate}
+      />
+      {center.drawerOpen && (
+        <NotificationDrawer
+          items={notifications}
+          onClose={center.closeDrawer}
+          onClearAll={clearNotifications}
+          onDismiss={dismissNotification}
+          onOpenProject={(n) => center.activate(n, null)}
+          onOpenNote={center.activate}
+        />
+      )}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ConfigChangedEvent, ProjectMeta, ProjectUpdatedEvent } from '../../shared/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ConfigChangedEvent, ProjectErrorEvent, ProjectMeta, ProjectUpdatedEvent } from '../../shared/types';
 import { api } from '../api';
+import { toNotifications, type HubNotifyEvent } from '../notifications/derive';
+import type { AppNotification } from '../notifications/types';
 
 export type SyncStatus = 'connecting' | 'live' | 'reconnecting' | 'polling';
 
@@ -47,9 +49,28 @@ function parse<T>(event: Event): T | null {
  * - 每次（重新）连上都拉一次清单，首次加载失败也能自愈；重连时 epoch+1 触发笔记全量 refetch。
  * - EventSource 进入 CLOSED（服务端返回非 200，如重启中的 503）时不会自行重连，这里按指数退避重建。
  * - 不支持 EventSource 时降级为 30 s 轮询。
+ * - project-updated / project-error 经 toNotifications 转成通知交给 onNotify（隐藏项目、首次扫描不产生通知）。
  */
-export function useHub(): HubState & { refreshConfig: () => Promise<void> } {
+export function useHub(onNotify?: (items: readonly AppNotification[]) => void): HubState & { refreshConfig: () => Promise<void> } {
   const [state, setState] = useState<HubState>(INITIAL);
+
+  /** 事件到达时用来取「变化前」的项目元数据；事件回调里同步更新，连续两条事件也不会拿到旧值 */
+  const projectsRef = useRef<ProjectMeta[]>([]);
+  const lastErrorsRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const onNotifyRef = useRef(onNotify);
+  useEffect(() => {
+    onNotifyRef.current = onNotify;
+  });
+  useEffect(() => {
+    projectsRef.current = state.projects;
+  }, [state.projects]);
+
+  const notify = useCallback((event: HubNotifyEvent) => {
+    const prev = projectsRef.current.find((p) => p.id === event.data.id);
+    const result = toNotifications(event, prev, lastErrorsRef.current);
+    lastErrorsRef.current = result.lastErrors;
+    if (result.notifications.length > 0) onNotifyRef.current?.(result.notifications);
+  }, []);
 
   const refreshConfig = useCallback(async () => {
     try {
@@ -91,6 +112,8 @@ export function useHub(): HubState & { refreshConfig: () => Promise<void> } {
       es.addEventListener('project-updated', (event) => {
         const data = parse<ProjectUpdatedEvent>(event);
         if (!data) return void refreshConfig();
+        notify({ name: 'project-updated', data });
+        projectsRef.current = upsert(projectsRef.current, data.project);
         setState((s) => ({
           ...s,
           projects: upsert(s.projects, data.project),
@@ -103,7 +126,11 @@ export function useHub(): HubState & { refreshConfig: () => Promise<void> } {
         // 事件不带 configError，补拉一次以同步配置文件错误提示
         void refreshConfig();
       });
-      es.addEventListener('project-error', () => void refreshConfig());
+      es.addEventListener('project-error', (event) => {
+        const data = parse<ProjectErrorEvent>(event);
+        if (data) notify({ name: 'project-error', data });
+        void refreshConfig();
+      });
       es.onerror = () => {
         setState((s) => ({ ...s, status: s.status === 'connecting' ? 'connecting' : 'reconnecting' }));
         if (es.readyState !== EventSource.CLOSED) return; // CONNECTING：浏览器会自行重连
@@ -120,7 +147,7 @@ export function useHub(): HubState & { refreshConfig: () => Promise<void> } {
       source?.close();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [refreshConfig]);
+  }, [refreshConfig, notify]);
 
   return { ...state, refreshConfig };
 }
