@@ -76,13 +76,17 @@ export type AppNotification = {
   at: number;
   read: boolean;
   body:
-    | { type: 'changes'; changes: NoteChange[] }
+    /** changes 最多保留前 50 条（切分支时可能上千处，全存会撑爆 localStorage）；total 是真实总数 */
+    | { type: 'changes'; changes: NoteChange[]; total: number }
     | { type: 'error'; reason: string }
     | { type: 'recovered' };
 };
 ```
 
-接口：`push(n)`（id 已存在则忽略）、`dismiss(id)`、`clearAll()`、`markAllRead()`、`useNotifications(): { items, unread }`。
+接口：`pushNotifications(items)`（id 已存在则忽略，返回真正新增的那些）、`dismissNotification(id)`、`clearNotifications()`、`markAllRead()`、`useNotifications(): { items, unread }`。
+
+- 入库前按 body 类型严格校验，非法条目丢弃。
+- 读 `localStorage` 失败后本次会话只用内存，不再写盘，避免用残缺列表覆盖磁盘上的历史。
 
 - 新的在前，最多 200 条，超出时丢弃最旧的。
 - 通过 `storage` 事件在多个标签页之间同步。
@@ -90,25 +94,31 @@ export type AppNotification = {
 ### 3.2 事件 → 通知（`src/client/notifications/derive.ts`，纯函数）
 
 ```ts
-toNotifications(event, prevMeta: ProjectMeta | undefined, lastErrors: ReadonlyMap<string, string>): AppNotification[]
+toNotifications(event, prevMeta: ProjectMeta | undefined, lastErrors: ReadonlyMap<string, string>): { notifications: AppNotification[]; lastErrors }
 ```
 
 - 项目 `hidden` 时（取事件里的新 meta，没有则取 `prevMeta`）返回空。
 - `project-updated`：
   - 带非空 `changes` → 一条 `changes`，`at` 取事件的 `at`。
   - `prevMeta` 处于 `!healthy || watchMode === 'manual'`，新 meta 为 `healthy && watchMode === 'live'` → 一条 `recovered`，同时清掉该项目的 `lastErrors`。
-- `project-error`：`lastErrors` 里该项目的原因与本次相同则跳过（恢复前同一异常只通知一次），否则一条 `error` 并记录原因。
+  - 恢复判断先于隐藏判断：隐藏项目恢复时也清掉 `lastErrors`，只是不发通知。
+- `project-error`：`lastErrors` 里该项目的原因与本次相同，或 `prevMeta.error` 已经是这个原因（刷新页面、新开标签页后 `lastErrors` 为空），都跳过；否则一条 `error` 并记录原因。
 
 摘要文案也放在这里，比如 `summarize(changes)` → `新增 1、修改 2`，以及卡片末尾的 `另有 1 处修改、1 处删除`。
 
 ### 3.3 `useHub` 接入
 
-在已有的 `project-updated` / `project-error` 回调里，用回调执行前的 `projects` 作 `prevMeta` 调用 `toNotifications`。结果交给 `notifications/dispatch.ts`：
+在已有的 `project-updated` / `project-error` 回调里，用回调执行前的项目元数据（`projectsRef`，所有写清单的地方都经 `commitProjects` 同步写它）作 `prevMeta` 调用 `toNotifications`，结果交给 `useNotificationCenter` 的 `receive`：
 
-- 写入 store。
-- 通知抽屉开着 → 新通知直接标为已读，不弹卡片。
-- `document.visibilityState === 'hidden'` 时：已授权则发系统通知，否则什么也不做，只累加角标。
-- 其余情况 → 加入弹出队列。
+- 先写入 store。`pushNotifications` 返回的 fresh 只说明「哪个标签页先写进去」，多个标签页之间是竞态，所以只用它门控系统通知。
+- 分流（`notifications/routing.ts` 的 `routeIncoming`）：
+  - 页面在后台 → 对 fresh 发系统通知（已授权时），不标已读。抽屉开着也一样。
+  - 页面可见且抽屉开着 → 标为已读，并加进本次打开期间的「新」集合。
+  - 其余 → 本标签页派生出的全部通知进入弹出队列。
+- 弹出队列最多 10 张，溢出时保留正在显示的前 3 张，丢弃排队中最旧的。
+- 回到前台且抽屉开着时，把当时未读的加进「新」集合后标为已读。
+
+`refreshConfig` 的响应合并时，请求发出后收到过 `project-updated` 的项目保留内存里的 meta；期间收到过 `config-changed` 则不动项目清单。
 
 SSE 重连只做全量刷新，不补发通知。
 
@@ -189,7 +199,7 @@ Drawer({ label, labelledBy?, width, onClose, children })
   - 不支持 Notification API 时不显示这一条。
 - **列表**：按「今天 / 昨天 / 更早」分组，卡片间距 `gap-2`。
 - **空态**：`EmptyState compact`，显示「暂无通知」。
-- 打开即调用 `markAllRead()`；打开期间到达的新通知也直接标为已读。
+- 打开时先拍下当前未读的 id 作为「新」集合，再调用 `markAllRead()`；卡片的「新」按这个集合显示，关闭抽屉时清空。打开期间到达的新通知也直接标为已读并加入集合。
 - **点项目名**：`navigate({ projectId, view: 当前视图, note: null })`，然后关闭抽屉。
 - **点行**：`navigate({ projectId, view: 当前视图, note: noteId })`，然后关闭抽屉。笔记不存在时由 `NoteDrawer` 现有的「未找到笔记」状态兜底。
 - **项目已不在 `hub.projects` 中**：`toast` 提示「项目「X」已移除」，不跳转。
@@ -199,7 +209,7 @@ Drawer({ label, labelledBy?, width, onClose, children })
 ### 4.5 系统通知（`notifications/desktop.ts`）
 
 - `desktopPermission()`、`requestDesktopPermission()`、`showDesktopNotification(n, onClick)`。
-- 标题是项目名；正文是摘要加第一处变更的标题（异常和已恢复显示原因或「实时监听已恢复」）。
+- 标题是项目名；正文是摘要加第一处变更的标题。异常只显示原因的类别（第一个「：」之前的部分，如「路径失效」），不带本机绝对路径——系统通知可能出现在锁屏和通知中心；完整原因只在应用内显示。已恢复显示「实时监听已恢复」。
 - `tag: edm:${projectId}`，同一项目的新通知替换旧的。
 - 点击时依次执行 `window.focus()`、跳转（规则同 4.4 的点项目名）、`notification.close()`。
 - 只在页面处于后台且已授权时调用。`127.0.0.1` 属于安全上下文，可以使用 Notification API。
