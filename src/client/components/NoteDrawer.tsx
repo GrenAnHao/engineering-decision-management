@@ -14,12 +14,13 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NoteDoc, NoteSummary } from '../../shared/types';
 import { api } from '../api';
 import { cites, findNote, type InCount } from '../derive';
 import { Banner, BannerButton } from '../ui/Banner';
 import { Button } from '../ui/Button';
+import { Drawer } from '../ui/Drawer';
 import { EmptyState, Skeleton } from '../ui/State';
 import { cn } from '../ui/tw';
 import { ClassBadge, StatusBadge } from './Badge';
@@ -245,55 +246,6 @@ function useNoteSnapshot(projectId: string, noteId: string | null) {
   return { snapshot, error, reload: () => setReloadTick((t) => t + 1) };
 }
 
-/** 对话框焦点管理：打开时聚焦关闭按钮，卸载时还给打开前的元素 */
-function useDialogFocus() {
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement;
-    closeRef.current?.focus();
-    return () => (prev as HTMLElement | null)?.focus?.();
-  }, []);
-  return closeRef;
-}
-
-/**
- * Esc 关闭抽屉。命令面板已用 Esc 关了自己（defaultPrevented）、正在输入法组合、
- * 或头上还压着一个打开的模态框（添加 / 重命名 / 确认对话框）时，都不关抽屉：一次 Esc 只关最上面那一层。
- */
-function useEscapeClose(onClose: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
-      if (document.querySelector('dialog[open]')) return;
-      onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-}
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-/** aria-modal 的抽屉要把 Tab 困在里面：到末尾回到开头，到开头 Shift+Tab 回到末尾，焦点不会漏到被遮住的页面上 */
-function useFocusTrap() {
-  const ref = useRef<HTMLElement>(null);
-  const onKeyDown = (e: ReactKeyboardEvent) => {
-    if (e.key !== 'Tab' || !ref.current) return;
-    const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null);
-    const first = items[0];
-    const last = items[items.length - 1];
-    if (!first || !last) return;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
-  return { ref, onKeyDown };
-}
-
 /**
  * 详情抽屉。打开时拉取一次完整内容作为快照；之后笔记被改动不自动替换正文，
  * 而是浮出「此笔记已更新 · 点击刷新」，由用户决定何时刷新。父组件以 noteKey 作 key，换篇即重置。
@@ -306,46 +258,32 @@ export function NoteDrawer({ projectId, noteKey, notes, inCount, onClose, onOpen
   const noteId = lockedId.current;
   const summary = noteId && notes ? notes.find((n) => n.id === noteId) : undefined;
   const { snapshot, error, reload } = useNoteSnapshot(projectId, noteId);
-  const closeRef = useDialogFocus();
-  const trap = useFocusTrap();
-  useEscapeClose(onClose);
 
   const stale = !!(summary && snapshot && summary.hash !== snapshot.hash);
   const deleted = !!(notes && !summary && snapshot);
   const missing = !!(notes && !noteId && !snapshot);
 
   return (
-    <>
-      <div aria-hidden="true" className="fixed inset-0 z-50 animate-fade-in bg-(--backdrop) backdrop-blur-[2px]" onClick={onClose} />
-      <aside
-        ref={trap.ref}
-        onKeyDown={trap.onKeyDown}
-        role="dialog"
-        aria-modal="true"
-        aria-label="笔记详情"
-        aria-labelledby="note-drawer-title"
-        className="fixed inset-y-0 right-0 z-[51] flex w-[min(100vw,52rem)] animate-slide-in-right flex-col bg-surface shadow-pop ring-1 ring-line-strong"
-      >
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-5 backdrop-blur sm:px-10">
-          {snapshot && <StatusBadge lifecycle={snapshot.lifecycle} />}
-          {snapshot && <ClassBadge cls={snapshot.cls} />}
-          <Button ref={closeRef} variant="ghost" size="icon" className="-mr-2 ml-auto" title="退出 (Esc)" aria-label="关闭" onClick={onClose}>
-            <X aria-hidden="true" />
-          </Button>
-        </header>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-10 sm:py-8">
-          <div className="space-y-6">
-            <Notices stale={stale} deleted={deleted} error={error} onReload={reload} />
-            {missing && (
-              <EmptyState compact icon={FileQuestionMark} title={`未找到笔记：${noteKey}`}>
-                它可能已被删除或移动，或链接有误。
-              </EmptyState>
-            )}
-            {!snapshot && !missing && !error && <DrawerSkeleton />}
-            {snapshot && <DrawerBody doc={snapshot} notes={notes ?? []} inCount={inCount} onOpenNote={onOpenNote} />}
-          </div>
+    <Drawer label="笔记详情" labelledBy="note-drawer-title" className="w-[min(100vw,52rem)]" onClose={onClose}>
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-5 backdrop-blur sm:px-10">
+        {snapshot && <StatusBadge lifecycle={snapshot.lifecycle} />}
+        {snapshot && <ClassBadge cls={snapshot.cls} />}
+        <Button data-autofocus variant="ghost" size="icon" className="-mr-2 ml-auto" title="退出 (Esc)" aria-label="关闭" onClick={onClose}>
+          <X aria-hidden="true" />
+        </Button>
+      </header>
+      <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-10 sm:py-8">
+        <div className="space-y-6">
+          <Notices stale={stale} deleted={deleted} error={error} onReload={reload} />
+          {missing && (
+            <EmptyState compact icon={FileQuestionMark} title={`未找到笔记：${noteKey}`}>
+              它可能已被删除或移动，或链接有误。
+            </EmptyState>
+          )}
+          {!snapshot && !missing && !error && <DrawerSkeleton />}
+          {snapshot && <DrawerBody doc={snapshot} notes={notes ?? []} inCount={inCount} onOpenNote={onOpenNote} />}
         </div>
-      </aside>
-    </>
+      </div>
+    </Drawer>
   );
 }
