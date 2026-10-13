@@ -6,7 +6,7 @@ import { ProjectRail, sortProjects, type ProjectActions } from './components/Pro
 import { TopBar } from './components/TopBar';
 import { findNote } from './derive';
 import { THEME_ICONS, VIEW_ICONS } from './icons';
-import { THEME_LABELS } from './labels';
+import { THEME_KEYWORDS, THEME_LABELS } from './labels';
 import { formatHash, normalizeRoute, VIEW_LABELS, VIEWS, type Route } from './router';
 import { useHashRoute } from './state/useHashRoute';
 import { useHub } from './state/useHub';
@@ -139,7 +139,7 @@ function Shell() {
         label: `主题：${THEME_LABELS[p]}`,
         hint: p === theme ? '当前' : undefined,
         icon: THEME_ICONS[p],
-        keywords: 'theme dark light 主题 深色 浅色 跟随系统',
+        keywords: THEME_KEYWORDS[p],
         run: () => setTheme(p),
       })),
     ],

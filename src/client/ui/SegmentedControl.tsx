@@ -5,7 +5,7 @@ import { cn } from './tw';
 export type SegmentOption<T extends string> = { value: T; label: string; icon: LucideIcon };
 
 export type SegmentedControlProps<T extends string> = {
-  /** nav：页面导航（aria-current）；radio：单选（radiogroup + 方向键） */
+  /** nav：页面导航（<nav> + aria-current）；radio：单选（radiogroup + 方向键） */
   mode: 'nav' | 'radio';
   /** 整组的可访问名称 */
   label: string;
@@ -17,7 +17,24 @@ export type SegmentedControlProps<T extends string> = {
   className?: string;
 };
 
-const NEXT_KEYS: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+const KEY_STEPS: ReadonlyMap<string, number> = new Map([
+  ['ArrowRight', 1],
+  ['ArrowDown', 1],
+  ['ArrowLeft', -1],
+  ['ArrowUp', -1],
+]);
+
+/** 方向键对应的下一项；非方向键返回 null。value 不在 options 里时从第一项起算 */
+export function nextOption<T extends string>(
+  options: readonly SegmentOption<T>[],
+  value: T,
+  key: string,
+): SegmentOption<T> | null {
+  const step = KEY_STEPS.get(key);
+  if (step === undefined || options.length === 0) return null;
+  const index = Math.max(0, options.findIndex((o) => o.value === value));
+  return options[(index + step + options.length) % options.length] ?? null;
+}
 
 /** 分段控件：一块滑动的底板跟随选中项，宽度随文字变化 */
 export function SegmentedControl<T extends string>({
@@ -29,39 +46,48 @@ export function SegmentedControl<T extends string>({
   iconOnly = false,
   className,
 }: SegmentedControlProps<T>) {
-  const listRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLElement>(null);
   const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
   const radio = mode === 'radio';
+  const hasActive = options.some((o) => o.value === value);
+  const buttons = () => [...(listRef.current?.querySelectorAll<HTMLElement>('[data-value]') ?? [])];
 
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
     const measure = () => {
       const active = list.querySelector<HTMLElement>('[data-active="true"]');
-      if (active) setPill({ left: active.offsetLeft, width: active.offsetWidth });
+      // 容器被 display:none 隐藏时宽度为 0，不更新：否则再显示时底板会从 0 宽度「长出来」
+      if (!active || active.offsetWidth === 0) return;
+      const next = { left: active.offsetLeft, width: active.offsetWidth };
+      setPill((prev) => (prev && prev.left === next.left && prev.width === next.width ? prev : next));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(list);
+    for (const el of buttons()) observer.observe(el);
     return () => observer.disconnect();
-  }, [value]);
+  }, [value, options, iconOnly]);
 
   // radio 组内用方向键移动并立即选中（WAI-ARIA radio group 约定），焦点跟着走
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const step = NEXT_KEYS[e.key];
-    if (!radio || !step) return;
-    e.preventDefault();
-    const index = options.findIndex((o) => o.value === value);
-    const next = options[(index + step + options.length) % options.length];
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (!radio || e.altKey || e.ctrlKey || e.metaKey) return; // Alt+← 是浏览器后退，不能吞
+    const next = nextOption(options, value, e.key);
     if (!next) return;
+    e.preventDefault();
     onChange(next.value);
-    listRef.current?.querySelector<HTMLElement>(`[data-value="${next.value}"]`)?.focus();
+    buttons().find((el) => el.dataset.value === next.value)?.focus();
   };
 
+  // 动态标签的 ref 类型对不上 div / nav 的并集，用回调 ref 写入统一的 HTMLElement ref
+  const setList = (el: HTMLElement | null) => {
+    listRef.current = el;
+  };
+  const Root = radio ? 'div' : 'nav';
   return (
-    <div
-      ref={listRef}
-      role={radio ? 'radiogroup' : 'navigation'}
+    <Root
+      ref={setList}
+      role={radio ? 'radiogroup' : undefined}
       aria-label={label}
       onKeyDown={onKeyDown}
       className={cn('relative flex shrink-0 rounded-[10px] bg-surface-2 p-0.5 ring-1 ring-line ring-inset', className)}
@@ -73,11 +99,11 @@ export function SegmentedControl<T extends string>({
           style={{ width: pill.width, transform: `translateX(${pill.left}px)` }}
         />
       )}
-      {options.map((o) => {
+      {options.map((o, i) => {
         const Icon = o.icon;
         const active = o.value === value;
         const semantics = radio
-          ? { role: 'radio' as const, 'aria-checked': active, tabIndex: active ? 0 : -1 }
+          ? { role: 'radio' as const, 'aria-checked': active, tabIndex: active || (!hasActive && i === 0) ? 0 : -1 }
           : { 'aria-current': active ? ('page' as const) : undefined };
         return (
           <button
@@ -99,6 +125,6 @@ export function SegmentedControl<T extends string>({
           </button>
         );
       })}
-    </div>
+    </Root>
   );
 }

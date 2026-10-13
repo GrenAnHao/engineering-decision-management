@@ -15,6 +15,13 @@ export const THEME_LABELS: Record<ThemePreference, string> = {
   dark: '深色',
 };
 
+/** 命令面板的搜索关键词；中文名已在 label 里，这里只补英文与别名，避免三条命令互相命中 */
+export const THEME_KEYWORDS: Record<ThemePreference, string> = {
+  system: 'theme 主题 system auto',
+  light: 'theme 主题 light',
+  dark: 'theme 主题 dark',
+};
+
 const CLASS_LABELS: Record<string, string> = {
   architecture: '架构设计',
   feature: '功能特性',
