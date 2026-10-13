@@ -1,6 +1,6 @@
 import { useEffect, useState, type FocusEvent } from 'react';
 import { createCountdown } from '../notifications/countdown';
-import { notificationText } from '../notifications/derive';
+import { notificationLabel } from '../notifications/derive';
 import type { AppNotification } from '../notifications/types';
 import { NotificationCard } from './NotificationCard';
 
@@ -70,7 +70,7 @@ export function NotificationStack({ items, ...handlers }: NotificationStackProps
     <div className="pointer-events-none fixed top-16 right-4 z-[60] w-[min(92vw,22rem)]">
       <div role="status" aria-live="polite" aria-relevant="additions" className="sr-only">
         {visible.map((n) => (
-          <p key={n.id}>{`${n.projectName}：${notificationText(n)}`}</p>
+          <p key={n.id}>{notificationLabel(n)}</p>
         ))}
       </div>
       <div role="region" aria-label="变更通知" className="flex flex-col gap-2">

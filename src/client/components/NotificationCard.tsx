@@ -3,7 +3,7 @@ import { useId, useState, type CSSProperties } from 'react';
 import type { NoteChange } from '../../shared/types';
 import { clockTime } from '../format';
 import { CHANGE_TONES, projectColor } from '../labels';
-import { changeLabel, notificationText, remainderText } from '../notifications/derive';
+import { changeLabel, notificationLabel, remainderText } from '../notifications/derive';
 import type { AppNotification } from '../notifications/types';
 import { Badge } from '../ui/Badge';
 import { cn } from '../ui/tw';
@@ -76,7 +76,7 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
 
   return (
     <article
-      aria-label={`${n.projectName}：${notificationText(n)}`}
+      aria-label={notificationLabel(n)}
       style={{ '--project': projectColor(n.projectOrder) } as CSSProperties}
       className={cn('relative overflow-hidden rounded-xl bg-surface text-[13px] ring-1 ring-line', variant === 'toast' ? 'shadow-pop' : 'shadow-card')}
     >

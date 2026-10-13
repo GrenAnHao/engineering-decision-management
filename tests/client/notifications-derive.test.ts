@@ -3,6 +3,7 @@ import type { NoteChange, ProjectMeta } from '../../src/shared/types';
 import {
   changeLabel,
   groupByDay,
+  notificationLabel,
   notificationText,
   remainderText,
   summarize,
@@ -151,6 +152,12 @@ describe('文案', () => {
     expect(notificationText({ ...base, body: { type: 'changes', changes: [added, modified] } })).toBe('新增 1、修改 1：X');
     expect(notificationText({ ...base, body: { type: 'error', reason: '路径失效' } })).toBe('路径失效');
     expect(notificationText({ ...base, body: { type: 'recovered' } })).toBe('实时监听已恢复');
+  });
+
+  test('notificationLabel 是「项目名：一句话描述」，用作卡片可访问名称与读屏摘要', () => {
+    const base = { id: 'x', projectId: 'P', projectName: '项目 P', projectOrder: 0, at: 0, read: false };
+    expect(notificationLabel({ ...base, body: { type: 'changes', changes: [added] } })).toBe('项目 P：新增 1：X');
+    expect(notificationLabel({ ...base, body: { type: 'error', reason: '路径失效' } })).toBe('项目 P：路径失效');
   });
 });
 

@@ -90,7 +90,7 @@ export function remainderText(changes: readonly NoteChange[], limit: number): st
     .join('、')}`;
 }
 
-/** 一句话描述：系统通知正文、卡片的可访问名称 */
+/** 一句话描述：系统通知正文，也是 notificationLabel 的后半句 */
 export function notificationText(n: AppNotification): string {
   switch (n.body.type) {
     case 'changes':
@@ -100,6 +100,11 @@ export function notificationText(n: AppNotification): string {
     case 'recovered':
       return '实时监听已恢复';
   }
+}
+
+/** 卡片的可访问名称、读屏摘要：「项目名：一句话描述」 */
+export function notificationLabel(n: AppNotification): string {
+  return `${n.projectName}：${notificationText(n)}`;
 }
 
 /** 按 今天 / 昨天 / 更早 分组，保持传入顺序（新的在前），跳过空组 */
