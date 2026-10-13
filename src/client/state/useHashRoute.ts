@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatHash, parseHash, type ParsedHash, type Route } from '../router';
 
 /** hash 路由：读取用 hashchange，写入用 replaceState（不产生历史记录，后退键不刷屏） */
@@ -18,5 +18,6 @@ export function useHashRoute(): [ParsedHash, (route: Route) => void] {
     setHash(next);
   }, []);
 
-  return [parseHash(hash), navigate];
+  const parsed = useMemo(() => parseHash(hash), [hash]);
+  return [parsed, navigate];
 }

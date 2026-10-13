@@ -44,19 +44,20 @@
 | 运行时 | Bun 1.3.14 | 已装于 `D:\nvm4w\nodejs\node_modules\bun\bin\bun.exe` |
 | 后端 | `Bun.serve()` 原生路由 | 无 Web 框架 |
 | 前端 | React 19.3.0 + TypeScript | |
-| 样式 | 原生 CSS + CSS 变量 | 从旧看板平移设计令牌 |
-| 构建 | Bun 原生（`import index.html`） | 无 Vite / webpack，无构建配置 |
+| 样式 | Tailwind CSS 4 + 语义令牌（浅色 / 深色） | 2026-10-12 由「平移旧看板的手写 CSS」改版而来，约定见 `2026-10-12-modern-ui-design-system.md` |
+| 构建 | Vite 8 + `@vitejs/plugin-react` | 2026-10-12 由「Bun 原生 `import index.html`」迁移而来：开发用 Vite 热更新，生产产物进 `dist/web` |
 | 路由 | 手写 hash 路由 | 4 个视图 + 1 个抽屉，引入 react-router 不划算 |
 | 字体 | 本地 4 个 woff2（约 103 KB） | 完全离线可用 |
 | 测试 | `bun test` | |
 
 ### 2.2 进程模型
 
-**单进程**。一个 `Bun.serve` 同时承担四件事：
+**运行时单进程**。一个 `Bun.serve` 同时承担四件事（前端是 `vite build` 产出的静态文件，由它分发）：
 
 ```
-bun run dev     # 开发：客户端 HMR + 服务端 --watch
-bun run start   # 运行：无 HMR
+bun run dev     # 开发：Vite :5273（热更新）+ 仅 API 的 Bun :5274（--watch），/api 含 SSE 经 Vite 代理
+bun run start   # 运行：先 vite build，再由 Bun 分发 dist/web，端口取 config.json
+bun run build   # 单体 exe：vite build 产物以 `with { type: 'file' }` 内嵌
 ```
 
 ```
@@ -66,7 +67,7 @@ bun run start   # 运行：无 HMR
 │                                        │                │
 │  /api/*  ──────────────────────────────┤                │
 │  /api/events (SSE) ◄── 广播 ───────────┘                │
-│  /*  ──► React 前端（HTML 转译 + JS bundle）             │
+│  /*  ──► React 前端（dist/web 静态文件，表查找）         │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
                           │
@@ -104,10 +105,13 @@ Engineering Decision Management\
 │     ├─ router.ts              hash 路由解析/生成
 │     ├─ state\                 per-project 状态层
 │     ├─ styles\
-│     │  ├─ tokens.css          设计令牌
+│     │  ├─ index.css           Tailwind 入口、主题映射、动效、基础样式
+│     │  ├─ tokens.css          语义令牌（浅色 / 深色）
+│     │  ├─ markdown.css        Markdown 正文排版
 │     │  └─ fonts.css           @font-face
 │     ├─ assets\fonts\          4 个 woff2
-│     ├─ components\            TopBar / ProjectRail / KpiRow / Badge / NoteDrawer / SearchPopover / MarkdownBody / LineageChips
+│     ├─ ui\                    通用组件：Button / Badge / Panel / Field / Chip / State / Banner / Modal / dialogs …
+│     ├─ components\            TopBar / ProjectRail / CommandPalette / KpiRow / Badge / NoteDrawer / MarkdownBody / LineageChips
 │     └─ views\                 BaselineView / TimelineView / AlternativesView / DirectoryView
 ├─ tests\
 └─ docs\superpowers\specs\
@@ -371,7 +375,7 @@ const PALETTE = ['#7C3AED', '#1D4ED8', '#0D9488', '#D97706', '#DC2626', '#0891B2
 
 | 事件 | 载荷 | 前端动作 |
 |---|---|---|
-| `connected` | `{ clientId }` | 顶栏信标转「实时同步中」 |
+| `connected` | `{ clientId }` | 同步状态转正常（顶栏不再显示重连提示） |
 | `project-updated` | `{ id, count, delta, scanMs, at }` | 见 §6.4 |
 | `config-changed` | `{ projects }` | 刷新左栏 |
 | `project-error` | `{ id, reason }` | 该项目灰显 + 错误标签 |
@@ -435,8 +439,8 @@ const PALETTE = ['#7C3AED', '#1D4ED8', '#0D9488', '#D97706', '#DC2626', '#0891B2
 
 ```
 <App>
-├─ <TopBar>              品牌 · 项目计数 chip · 4 视图 Tab · 搜索框 · 实时信标
-│   └─ <SearchPopover>   即时下拉（/ 聚焦，↑↓ 选择，↵ 打开，Esc 关闭）
+├─ <TopBar>              品牌 / 当前项目 · 4 视图 Tab · 命令面板入口 · 主题切换 · 同步信标（仅异常时出现）
+├─ <CommandPalette>      ⌘K / Ctrl+K / `/` 打开：搜索决策 · 跳转视图 · 切换项目 · 常用操作
 ├─ <Shell>
 │   ├─ <ProjectRail>     项目条目 · + 添加项目
 │   └─ <Canvas>
@@ -507,7 +511,7 @@ const PALETTE = ['#7C3AED', '#1D4ED8', '#0D9488', '#D97706', '#DC2626', '#0891B2
 | 决策清单三维筛选 | 状态 / 分类 / 排序（最新、最早、引用最多） |
 | 详情抽屉五段 | 背景痛点 / 落地裁定 / 放弃备选 / 收益代价 / 血缘链路 |
 | 复制反向代码注释 | `// Note: 见 .agents/notes/<id>` 一键复制 |
-| 全局搜索 | `/` 聚焦，↑↓ 选择，↵ 打开，Esc 关闭，浮层显示前 7 条 |
+| 命令面板 | `Ctrl K` / `⌘K` / `/` 打开，↑↓ 选择，↵ 执行，Esc 关闭；决策最多显示前 8 条，「查看全部」进决策清单 |
 | 血缘链路 | 前置先决依据（出链） / 派生制约影响（入链） |
 | 深链 | `#note=<id>` 直接打开抽屉 |
 
@@ -613,7 +617,7 @@ background-size: 28px 28px;
 
 | 情况 | 降级 |
 |---|---|
-| `fs.watch` 建立失败 | 该项目标记「手动刷新模式」，顶栏信标变灰，UI 提供刷新按钮 |
+| `fs.watch` 建立失败 | 该项目标记「手动刷新模式」，顶栏出现「手动刷新模式」按钮，UI 提供刷新入口 |
 | SSE 断连 | `EventSource` 自动重连，重连后全量 refetch |
 | 浏览器不支持 `EventSource` | 降级为 30 s 轮询 |
 
@@ -634,6 +638,8 @@ background-size: 28px 28px;
 ## 8. 实现注意事项
 
 ### 8.1 OneDrive 与 `node_modules`
+
+> **已移除（2026-10-12）**：用户决定不再在启动时提示 OneDrive 同步问题，相关检测代码已删除。以下为原始设计，仅作历史记录。
 
 应用目录位于 OneDrive 同步范围内，安装依赖会产生大量同步流量。
 

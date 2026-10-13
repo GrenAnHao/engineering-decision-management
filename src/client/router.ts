@@ -2,10 +2,10 @@ export const VIEWS = ['baseline', 'timeline', 'alternatives', 'directory'] as co
 export type ViewId = (typeof VIEWS)[number];
 
 export const VIEW_LABELS: Record<ViewId, string> = {
-  baseline: '🏛️ 架构基线',
-  timeline: '⏱️ 演进时间线',
-  alternatives: '🛡️ 避坑智库',
-  directory: '📋 决策清单',
+  baseline: '架构基线',
+  timeline: '演进时间线',
+  alternatives: '避坑智库',
+  directory: '决策清单',
 };
 
 export type Route = { projectId: string; view: ViewId; note: string | null };

@@ -26,13 +26,13 @@ const LINKS: LinkResult[] = [
   { kind: 'unresolved', rawHref: './missing.md', anchor: '' },
 ];
 
-test('链接按 rawHref 对回三态：resolved 为按钮、external 带 ↗、unresolved 为断链', () => {
+test('链接按 rawHref 对回三态：resolved 为按钮、external 带外链图标、unresolved 为断链', () => {
   const html = renderToStaticMarkup(
     <MarkdownBody source={'[甲](./x.md) [乙](../../../../docs/d.md) [丙](./missing.md)'} links={LINKS} onOpenNote={() => {}} />,
   );
   expect(html).toContain('<button type="button" class="md-link">甲</button>');
   expect(html).toContain('class="md-link external"');
-  expect(html).toContain('↗');
+  expect(html).toContain('lucide-arrow-up-right');
   expect(html).toContain('class="md-link broken"');
   expect(html).toContain('（断链）');
 });

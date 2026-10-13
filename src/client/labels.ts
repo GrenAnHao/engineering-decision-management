@@ -1,4 +1,5 @@
 import type { Lifecycle } from '../shared/types';
+import type { Tone } from './ui/Badge';
 
 export const STATUS_LABELS: Record<Lifecycle, string> = {
   implemented: '已落地',
@@ -18,6 +19,27 @@ const CLASS_LABELS: Record<string, string> = {
 
 export function classLabel(cls: string): string {
   return CLASS_LABELS[cls] ?? cls;
+}
+
+export const STATUS_TONES: Record<Lifecycle, Tone> = {
+  implemented: 'emerald',
+  proposed: 'amber',
+  rejected: 'rose',
+  archived: 'neutral',
+};
+
+const CLASS_TONES: Record<string, Tone> = {
+  architecture: 'orange',
+  feature: 'blue',
+  'bug-fix': 'emerald',
+  simplification: 'teal',
+  process: 'purple',
+  testing: 'pink',
+};
+
+/** 分类的徽标色系；未知分类用中性灰 */
+export function classTone(cls: string): Tone {
+  return CLASS_TONES[cls] ?? 'neutral';
 }
 
 /** 左栏状态占比条：落地绿 / 待评审黄 / 否决红 / 归档灰 */

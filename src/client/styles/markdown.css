@@ -1,0 +1,202 @@
+/*
+ * Markdown 正文排版（详情抽屉里的 .md-body）。
+ * MarkdownBody 渲染出的元素不带类名，这里用 .md-body 下的后代选择器 + tokens.css 的变量排版，浅色 / 深色随 data-theme 自动切换。
+ * 放在 components 层：压过 preflight 的重置（列表无符号、标题无字号、svg 为 block 等），又仍可被工具类覆盖。
+ */
+@layer components {
+  .md-body {
+    /*
+     * 断链色。令牌里没有 rose，这里是唯一的色值字面量：混入 25% 的 --fg，
+     * 浅色下更深、深色下更亮，两种主题下对比度都 ≥ 4.5:1。
+     */
+    --md-broken: color-mix(in srgb, rgb(225 29 72) 75%, var(--fg));
+
+    font-size: 14.5px;
+    line-height: 1.8;
+    color: var(--fg-muted);
+    overflow-wrap: break-word;
+    text-wrap: pretty;
+  }
+
+  /* 行内模式（verdict）只输出 <span>：字号、行高、颜色交给外层容器 */
+  span.md-body {
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+  }
+
+  /* 块间距：首尾贴边，段与段之间由各元素的下外边距撑开 */
+  .md-body p,
+  .md-body ul,
+  .md-body ol,
+  .md-body blockquote,
+  .md-body pre,
+  .md-body table {
+    margin: 0 0 12px;
+  }
+  .md-body > :first-child {
+    margin-top: 0;
+  }
+  .md-body > :last-child {
+    margin-bottom: 0;
+  }
+
+  /* 标题：抽屉里已有 h1 与章节标题，正文标题从 h3 起 */
+  .md-body h3,
+  .md-body h4,
+  .md-body h5,
+  .md-body h6 {
+    margin: 22px 0 8px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.5;
+    color: var(--fg);
+  }
+  .md-body h3 {
+    font-size: 15.5px;
+  }
+  .md-body h4 {
+    font-size: 14.5px;
+  }
+  .md-body h5,
+  .md-body h6 {
+    font-size: 13.5px;
+  }
+
+  .md-body b {
+    font-weight: 600;
+    color: var(--fg);
+  }
+  span.md-body b {
+    color: inherit;
+  }
+
+  /* 列表：preflight 去掉了符号与缩进，这里补回；嵌套列表紧贴上一行 */
+  .md-body ul,
+  .md-body ol {
+    padding-left: 1.4em;
+  }
+  .md-body ul {
+    list-style: disc;
+  }
+  .md-body ol {
+    list-style: decimal;
+  }
+  .md-body ul ul {
+    list-style: circle;
+  }
+  .md-body ul ul ul {
+    list-style: square;
+  }
+  .md-body li::marker {
+    color: var(--fg-subtle);
+  }
+  .md-body li + li {
+    margin-top: 4px;
+  }
+  .md-body li > ul,
+  .md-body li > ol {
+    margin: 4px 0 0;
+  }
+  .md-body li > :is(p, pre, blockquote, table) {
+    margin: 6px 0 0;
+  }
+
+  .md-body blockquote {
+    padding: 2px 0 2px 14px;
+    border-left: 3px solid var(--line-strong);
+    color: var(--fg-subtle);
+  }
+
+  /* 行内代码：浅底小标签 */
+  .md-body code {
+    padding: 0.1em 0.4em;
+    border-radius: 6px;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent-text);
+  }
+
+  /* 代码块：深色底、横向滚动；块内的 code 不再带小标签样式 */
+  .md-body pre {
+    padding: 14px 16px;
+    overflow-x: auto;
+    border-radius: 8px;
+    background: var(--code-bg);
+    box-shadow: 0 0 0 1px var(--line);
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--code-fg);
+  }
+  .md-body pre code {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-size: inherit;
+    color: inherit;
+  }
+
+  /* 表格：自身作为横向滚动容器，内容窄时收缩到内容宽度，放不下时先换行、再滚动 */
+  .md-body table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+  .md-body th,
+  .md-body td {
+    min-width: 4em;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  .md-body th {
+    background: var(--surface-2);
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  /* 链接三态：可跳转（resolved / http 外链）、外部引用（不可点）、断链 */
+  .md-link {
+    max-width: 100%;
+    font: inherit;
+    text-align: left;
+    color: var(--accent-text);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.15s;
+    cursor: pointer;
+  }
+  button.md-link:hover,
+  a.md-link:hover {
+    text-decoration-color: currentColor;
+    text-decoration-thickness: 2px;
+  }
+  .md-link.external {
+    color: var(--fg-subtle);
+    text-decoration: none;
+    cursor: default;
+  }
+  /* preflight 把 svg 设成 block，不改回行内图标会折到下一行 */
+  .md-link.external svg {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    margin-left: 2px;
+    vertical-align: -0.1em;
+  }
+  .md-link.broken {
+    color: var(--md-broken);
+    text-decoration: line-through;
+    cursor: default;
+  }
+}

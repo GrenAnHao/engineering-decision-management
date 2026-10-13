@@ -1,37 +1,64 @@
-/* 设计令牌：平移自旧看板 agent-notes-board.html，补齐旧版引用但未定义的 --brand-cyan */
+/*
+ * 设计令牌。组件只引用语义名（bg-surface / text-fg / border-line / bg-accent …），不直接写色值，
+ * 浅色与深色两套取值都在这里，切换主题只是 <html data-theme> 变化。
+ */
 :root {
-  --bg-base: #F8FAFC;
-  --bg-surface: #FFFFFF;
-  --bg-surface-subtle: #F1F5F9;
-  --border-subtle: #F1F5F9;
-  --border-normal: #E2E8F0;
-  --border-focus: #1D4ED8;
+  color-scheme: light;
 
-  --text-pure: #0A0E1A;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-tertiary: #94A3B8;
-  --text-mono-faint: #CBD5E1;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;
+  --surface-3: #e8ebf0;
+  --line: rgb(15 23 42 / 0.09);
+  --line-strong: rgb(15 23 42 / 0.17);
 
-  --brand-blue: #1D4ED8;
-  --brand-blue-hover: #2563EB;
-  --brand-blue-glow: rgba(29, 78, 216, 0.12);
-  --brand-cyan: #0891B2;
-  --alert-ruby: #DC2626;
-  --alert-ruby-subtle: #FEF2F2;
-  --amber-core: #D97706;
-  --emerald-live: #059669;
-  --purple-meta: #7C3AED;
-  --teal-prune: #0D9488;
+  --fg: #0f172a;
+  --fg-muted: #475569;
+  --fg-subtle: #5a6a7f;
 
-  --font-display: "Space Grotesk", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-body: "Plus Jakarta Sans", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Microsoft YaHei", monospace;
+  /* accent：作填充（按钮、徽标）与作文字（链接、选中态）取值不同，深色下文字用更亮的蓝 */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-text: #1d4ed8;
+  --accent-soft: rgb(37 99 235 / 0.08);
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --code-bg: #0f172a;
+  --code-fg: #e2e8f0;
+  --glow: rgb(37 99 235 / 0.07);
+  --backdrop: rgb(15 23 42 / 0.4);
 
-  --topbar-h: 64px;
-  --rail-w: 186px;
+  --elev-1: 0 1px 2px rgb(15 23 42 / 0.05), 0 0 0 1px rgb(15 23 42 / 0.02);
+  --elev-2: 0 2px 4px rgb(15 23 42 / 0.05), 0 8px 20px -6px rgb(15 23 42 / 0.1);
+  --elev-pop: 0 16px 40px -8px rgb(15 23 42 / 0.22), 0 2px 8px rgb(15 23 42 / 0.08);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0a0c10;
+  --surface: #11141a;
+  --surface-2: #171b23;
+  --surface-3: #1f2430;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.15);
+
+  --fg: #e7eaf1;
+  --fg-muted: #a1aabb;
+  --fg-subtle: #8f99ab;
+
+  --accent: #2f6fe8;
+  --accent-hover: #2b66da;
+  --accent-fg: #ffffff;
+  --accent-text: #8ab4ff;
+  --accent-soft: rgb(91 146 245 / 0.14);
+
+  --code-bg: #0b0d12;
+  --code-fg: #d7dde8;
+  --glow: rgb(91 146 245 / 0.1);
+  --backdrop: rgb(0 0 0 / 0.55);
+
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.02);
+  --elev-2: 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 20px -6px rgb(0 0 0 / 0.55);
+  --elev-pop: 0 16px 40px -8px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
 }

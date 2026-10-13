@@ -14,3 +14,7 @@ Desktop.ini
 
 # 配置原子写的临时文件
 *.tmp
+
+# 单体可执行文件输出（含 bun 编译失败时残留的临时文件）
+dist/
+.*.bun-build

@@ -1,3 +1,4 @@
+import { ArrowUpRight } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import type { LinkResult } from '../../shared/types';
 import { parseBlocks, parseInline, type Block, type Inline } from '../markdown';
@@ -15,15 +16,16 @@ function renderLink(href: string, children: ReactNode, key: number, ctx: LinkCon
   }
   if (result?.kind === 'external') {
     return (
-      <span key={key} className="md-link external" title={`↗ 外部引用：${href}`}>
-        {children} <span aria-hidden="true">↗</span>
+      <span key={key} className="md-link external" title={`外部引用：${href}`}>
+        {children}
+        <ArrowUpRight aria-hidden="true" />
         <span className="sr-only">（外部引用）</span>
       </span>
     );
   }
   if (result?.kind === 'unresolved') {
     return (
-      <span key={key} className="md-link broken" title={`⚠ 断链：${href}`}>
+      <span key={key} className="md-link broken" title={`断链：${href}`}>
         {children}
         <span className="sr-only">（断链）</span>
       </span>
@@ -119,6 +121,7 @@ export type MarkdownBodyProps = {
   inline?: boolean;
 };
 
+/** 渲染出的元素不带类名，排版在 styles/markdown.css（.md-body 后代选择器）；类名钩子 md-body / md-link / external / broken 勿改 */
 export function MarkdownBody({ source, links, onOpenNote, inline = false }: MarkdownBodyProps) {
   const ctx = { links, onOpenNote };
   const blocks = useMemo(() => (inline ? null : parseBlocks(source)), [source, inline]);

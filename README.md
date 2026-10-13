@@ -10,19 +10,43 @@
 
 ```bash
 bun install
-bun run dev      # 开发：前端 HMR + 服务端 --watch
-bun run start    # 日常使用：无 HMR
+bun run dev      # 开发：Vite 热更新 + Bun API（--watch）
+bun run start    # 日常使用：先构建前端，再由 Bun 一个进程分发
 ```
 
-打开 http://127.0.0.1:5173 。服务只监听 `127.0.0.1`。
+- `dev`：打开 http://127.0.0.1:5273（Vite）。它把 `/api`（含 SSE）代理给仅提供 API 的 Bun 服务（127.0.0.1:5274）。这两个端口固定（见 `src/shared/dev.ts`），与 `config.json` 的 `port` 无关；被占用时 Vite 直接报错而不是换端口。故意没用 Vite 默认的 5173，免得和机器上别的 Vite 项目串台。
+- `start`：打开 http://127.0.0.1:5173（取 `config.json` 的 `port`）。每次启动都会先 `vite build`，约 1–2 秒。
+
+服务只监听 `127.0.0.1`。
 
 其他脚本：
 
 ```bash
+bun run build:web   # 只把前端构建到 dist/web
 bun test            # 单元 + 集成 + 端到端
 bun run typecheck   # tsc --noEmit
 bun run fonts       # 重新下载本地字体（一般不需要，字体已随仓库提交）
 ```
+
+## 界面
+
+- **命令面板**：`Ctrl K`（macOS 为 `⌘K`）或 `/` 打开。搜索当前项目的决策，也能跳转视图、切换项目、添加项目、重新扫描、切换主题；`↑↓` 选择，`↵` 执行，`Esc` 关闭。
+- **主题**：顶栏右侧的按钮在「跟随系统 → 浅色 → 深色」之间轮换，偏好保存在浏览器本地。
+- **窄屏**：宽度小于 1024 px 时左栏收成抽屉，从顶栏左上角的菜单按钮打开。
+- 添加 / 重命名 / 隐藏 / 移除项目用应用内对话框与提示完成；隐藏后提示条上有「撤销」。
+
+## 打包为单体可执行文件
+
+```bash
+bun run build
+```
+
+流程：`vite build` → 把 `dist/web` 的每个文件以 `with { type: 'file' }` 内嵌进生成的入口 `dist/embed/entry.ts` → `bun build --compile`。产物为 `dist/decision-hub.exe`（Windows；其他平台无扩展名），约 100 MB，内含 Bun 运行时与构建好的前端，目标机器无需安装 Bun 或 `node_modules`，运行时也不需要 `dist/web`。
+
+- 运行时在 **exe 所在目录** 读写 `config.json`；该文件不存在时使用内置默认值（扫描根为 exe 所在目录的上一级）。也可以用 `EDM_CONFIG` 指定配置路径。
+- exe 里的前端是构建那一刻的快照，改了前端要重新 `bun run build`。
+- 左栏的添加 / 重命名 / 隐藏会写回 `config.json`，所以 exe 应放在可写目录（不要放进 Program Files 之类的只读目录）。
+- `dist/` 不进 git；本目录在 OneDrive 里时，约 100 MB 的产物会被同步，需要的话把它复制到同步目录之外再运行。
 
 ## 配置 `config.json`
 
@@ -45,27 +69,12 @@ bun run fonts       # 重新下载本地字体（一般不需要，字体已随�
 
 - 只读 `<项目>/.agents/notes/<lifecycle>/<class>/…/*.md`，`lifecycle` ∈ `implemented | proposed | rejected | archived`
 - 跳过 `.` 开头的文件和目录；`xxx.zh.md` 与 `xxx.md` 视为同一篇，以 `.zh.md` 为准
-- 链接三态：项目内能找到 → 可点击；指向 notes 目录之外 → 灰色「↗ 外部引用」；项目内找不到 → 红色「⚠ 断链」。不跨项目解析
-
-## OneDrive 注意事项
-
-本目录位于 OneDrive 同步范围内时，`node_modules`（数千个小文件）会被同步，产生大量流量。OneDrive 没有按文件夹名排除的设置，推荐把 `node_modules` 放到同步目录之外，再用目录联接（junction）接回来：
-
-在本目录打开 `cmd`（不是 PowerShell / Git Bash）执行：
-
-```cmd
-rmdir /s /q node_modules
-mkdir "%LOCALAPPDATA%\edm-node_modules"
-mklink /J node_modules "%LOCALAPPDATA%\edm-node_modules"
-bun install
-```
-
-`bun install` 会沿用这个联接。服务启动时若检测到应用在 OneDrive 内而 `node_modules` 是实体目录，会在控制台打印提示（不会自动修改任何 OneDrive 设置）。
+- 链接三态：项目内能找到 → 可点击；指向 notes 目录之外 → 灰色「外部引用」；项目内找不到 → 红色「断链」。不跨项目解析
 
 ## 降级行为
 
 | 情况 | 表现 |
 |---|---|
 | 项目路径失效 / 没有 `.agents/notes` | 左栏灰显并标「路径失效」，其他项目不受影响 |
-| 文件监听建立失败 | 该项目切为「手动刷新」，顶栏信标变灰，点击信标或左栏 ↻ 重扫 |
-| SSE 断开 | 浏览器自动重连，重连后全量刷新 |
+| 文件监听建立失败 | 该项目切为「手动刷新」，左栏标「手动刷新」，顶栏出现「手动刷新模式」按钮；点它或左栏的重新扫描按钮刷新 |
+| SSE 断开 | 顶栏出现「连接断开，重连中…」；浏览器自动重连，重连后全量刷新。正常连接时顶栏不显示任何同步状态 |
