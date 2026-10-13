@@ -147,9 +147,12 @@ function withoutLifecycle(id: string): string {
 const CHANGE_ORDER: Record<NoteChange['kind'], number> = { moved: 0, added: 1, modified: 2, removed: 3 };
 
 /**
- * 两次扫描之间的笔记变化。
- * 新增与删除里去掉首段后 id 相同的配成一次迁移（同一去首段 id 有多个候选时按完整 id 码点序依次配对）；
- * 迁移同时内容也改了，只记一条 moved。输出按 迁移 → 新增 → 修改 → 删除，组内按标题、再按 id 排序。
+ * 两次扫描之间的笔记变化。「迁移」以 lifecycle 字段为准（界面上的状态徽标与计数都用它，Status 行优先、缺失时按目录）：
+ * - 同一 id：lifecycle 变了记 moved（id 与 fromId 相同），即使内容也改了也只记这一条；lifecycle 没变而 hash 变了记 modified。
+ * - 新增与删除里去掉首段后 id 相同的跨目录配对（同一去首段 id 有多个候选时按完整 id 码点序依次配对）：
+ *   lifecycle 不同记 moved（id 取新、fromId 取旧）；lifecycle 相同（只换了目录、Status 没变）记 modified（id、lifecycle 取新值）。
+ * - 其余新增记 added，其余删除记 removed。
+ * 输出按 迁移 → 新增 → 修改 → 删除，组内按标题、再按 id 排序。
  */
 export function diffNotes(prev: readonly NoteDoc[], next: readonly NoteDoc[]): NoteChange[] {
   const prevById = new Map(prev.map((n) => [n.id, n]));
@@ -170,14 +173,23 @@ export function diffNotes(prev: readonly NoteDoc[], next: readonly NoteDoc[]): N
     const from = removedByRest.get(withoutLifecycle(n.id))?.find((c) => !paired.has(c.id));
     if (from) {
       paired.add(from.id);
-      changes.push({ kind: 'moved', id: n.id, fromId: from.id, title: n.title, from: from.lifecycle, to: n.lifecycle });
+      changes.push(
+        from.lifecycle !== n.lifecycle
+          ? { kind: 'moved', id: n.id, fromId: from.id, title: n.title, from: from.lifecycle, to: n.lifecycle }
+          : { kind: 'modified', id: n.id, title: n.title, lifecycle: n.lifecycle },
+      );
     } else {
       changes.push({ kind: 'added', id: n.id, title: n.title, lifecycle: n.lifecycle });
     }
   }
   for (const n of next) {
     const old = prevById.get(n.id);
-    if (old && old.hash !== n.hash) changes.push({ kind: 'modified', id: n.id, title: n.title, lifecycle: n.lifecycle });
+    if (!old) continue;
+    if (old.lifecycle !== n.lifecycle) {
+      changes.push({ kind: 'moved', id: n.id, fromId: n.id, title: n.title, from: old.lifecycle, to: n.lifecycle });
+    } else if (old.hash !== n.hash) {
+      changes.push({ kind: 'modified', id: n.id, title: n.title, lifecycle: n.lifecycle });
+    }
   }
   for (const n of removed) {
     if (!paired.has(n.id)) changes.push({ kind: 'removed', id: n.id, title: n.title, lifecycle: n.lifecycle });

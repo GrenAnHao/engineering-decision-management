@@ -147,6 +147,22 @@ describe('diffNotes', () => {
     ]);
   });
 
+  test('同一 id 的 lifecycle 变了（原地改 Status）记一次迁移，内容同时改了也只记一条', () => {
+    const prev: NoteDoc[] = [{ ...withHash('proposed/a/x.md', '1', 'X') }];
+    const next: NoteDoc[] = [{ ...withHash('proposed/a/x.md', '2', 'X 改'), lifecycle: 'implemented' }];
+    expect(diffNotes(prev, next)).toEqual([
+      { kind: 'moved', id: 'proposed/a/x.md', fromId: 'proposed/a/x.md', title: 'X 改', from: 'proposed', to: 'implemented' },
+    ]);
+  });
+
+  test('跨目录配对但 lifecycle 相同（只换了目录、Status 没变）记为修改', () => {
+    const prev: NoteDoc[] = [{ ...doc('proposed/a/x.md'), lifecycle: 'implemented' }];
+    const next: NoteDoc[] = [doc('implemented/a/x.md')];
+    expect(diffNotes(prev, next)).toEqual([
+      { kind: 'modified', id: 'implemented/a/x.md', title: 'implemented/a/x.md', lifecycle: 'implemented' },
+    ]);
+  });
+
   test('同一去首段 id 有多个候选时按完整 id 码点序配对，多出来的仍记为删除', () => {
     const prev = [doc('rejected/a/x.md'), doc('proposed/a/x.md')];
     const next = [doc('implemented/a/x.md')];
