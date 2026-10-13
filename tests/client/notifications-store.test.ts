@@ -172,6 +172,15 @@ test('读失败后进入内存模式：存储恢复也不会覆盖磁盘上的�
   expect(JSON.parse(disk.get('edm-notifications')!)).toEqual([n('history')]);
 });
 
+test('读失败时保留此前已读到的历史', () => {
+  pushNotifications([n('a')]);
+  expect(readNotifications().map((x) => x.id)).toEqual(['a']);
+  stubStorage(true);
+  expect(readNotifications().map((x) => x.id)).toEqual(['a']);
+  pushNotifications([n('b')]);
+  expect(readNotifications().map((x) => x.id)).toEqual(['b', 'a']);
+});
+
 test('localStorage 不可用时存在内存里，本次会话内照常使用', () => {
   stubStorage(true);
   expect(readNotifications()).toEqual([]);

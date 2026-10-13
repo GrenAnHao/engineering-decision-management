@@ -76,8 +76,10 @@ export function readNotifications(): AppNotification[] {
   try {
     raw = localStorage.getItem(STORAGE_KEY);
   } catch {
+    // 保留此前读到的历史，别让列表突然变空。readNotifications 作为 getSnapshot 会在渲染时改模块状态，
+    // 但这一步幂等（再次进入只是重复赋同一个值），没有危害；write 总是生成新数组，共享 cache.items 是安全的
     storageBroken = true;
-    memory = [];
+    memory = cache.items;
     return memory;
   }
   if (raw !== cache.raw) cache = { raw, items: parse(raw) };
