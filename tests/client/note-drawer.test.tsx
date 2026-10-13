@@ -14,6 +14,7 @@ test('抽屉渲染为带标题关联的模态对话框，并带关闭按钮', ()
   expect(html).toContain('aria-modal="true"');
   expect(html).toContain('aria-labelledby="note-drawer-title"');
   expect(html).toContain('title="退出 (Esc)"');
+  expect(html).toMatch(/<button[^>]*data-autofocus/); // 关闭按钮是打开时的初始焦点
 });
 
 test('笔记列表已加载但找不到该笔记时提示未找到', () => {

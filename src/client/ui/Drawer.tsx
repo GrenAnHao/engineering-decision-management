@@ -6,18 +6,22 @@ export type DrawerProps = {
   label: string;
   /** 指向标题元素的 id；有标题时读屏优先读它 */
   labelledBy?: string;
-  /** 宽度、底色等，追加到侧边面板上 */
+  /** 面板宽度由调用方在这里传入（如 w-[min(100vw,52rem)]），底色等也可在此覆盖；基础类里不含宽度 */
   className?: string;
   onClose: () => void;
+  /** 子元素中应有一个带 data-autofocus 的元素，打开时聚焦它；找不到时聚焦面板本身 */
   children: ReactNode;
 };
 
-/** 打开时聚焦面板内带 data-autofocus 的元素，卸载时把焦点还给打开前的元素 */
+/** 打开时聚焦面板内带 data-autofocus 的元素（没有则聚焦面板本身），卸载时把焦点还给打开前的元素（仍在文档中才还） */
 function useDialogFocus(container: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const prev = document.activeElement;
-    container.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
-    return () => (prev as HTMLElement | null)?.focus?.();
+    const panel = container.current;
+    (panel?.querySelector<HTMLElement>('[data-autofocus]') ?? panel)?.focus();
+    return () => {
+      if (prev instanceof HTMLElement && prev.isConnected) prev.focus();
+    };
   }, [container]);
 }
 
@@ -59,7 +63,13 @@ function useFocusTrap() {
   return { ref, onKeyDown };
 }
 
-/** 右侧抽屉外壳：遮罩（点击关闭）+ 模态侧边面板（焦点陷阱、Esc 关闭、焦点归还） */
+/**
+ * 右侧抽屉外壳：遮罩（点击关闭）+ 模态侧边面板（焦点陷阱、Esc 关闭、焦点归还）。
+ * 子元素中应有一个带 data-autofocus 的元素，打开时聚焦它；找不到时聚焦面板本身。
+ * 宽度由 className 传入。
+ * 同一时间只应打开一个 Drawer：Esc 监听挂在 window 上，两个 Drawer 叠在一起时一次 Esc 会把两个都关掉。
+ * 目前的使用方（笔记抽屉、通知抽屉）是互斥的。
+ */
 export function Drawer({ label, labelledBy, className, onClose, children }: DrawerProps) {
   const trap = useFocusTrap();
   useDialogFocus(trap.ref);
@@ -67,14 +77,16 @@ export function Drawer({ label, labelledBy, className, onClose, children }: Draw
   return (
     <>
       <div aria-hidden="true" className="fixed inset-0 z-50 animate-fade-in bg-(--backdrop) backdrop-blur-[2px]" onClick={onClose} />
+      {/* outline-none：tabIndex=-1 只用来在没有 data-autofocus 时接住焦点，聚焦的是整个面板而非交互控件，不需要焦点环 */}
       <aside
         ref={trap.ref}
+        tabIndex={-1}
         onKeyDown={trap.onKeyDown}
         role="dialog"
         aria-modal="true"
         aria-label={label}
         aria-labelledby={labelledBy}
-        className={cn('fixed inset-y-0 right-0 z-[51] flex animate-slide-in-right flex-col bg-surface shadow-pop ring-1 ring-line-strong', className)}
+        className={cn('fixed inset-y-0 right-0 z-[51] flex animate-slide-in-right flex-col bg-surface shadow-pop ring-1 ring-line-strong outline-none', className)}
       >
         {children}
       </aside>
