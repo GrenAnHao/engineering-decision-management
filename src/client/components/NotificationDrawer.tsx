@@ -10,6 +10,8 @@ import { NotificationCard } from './NotificationCard';
 
 export type NotificationDrawerProps = {
   items: readonly AppNotification[];
+  /** 本次打开期间标「新」的通知 id（打开时的未读快照 + 打开期间到达的） */
+  highlighted: ReadonlySet<string>;
   onClose: () => void;
   onClearAll: () => void;
   onDismiss: (id: string) => void;
@@ -44,7 +46,7 @@ function DesktopPermissionBar() {
   );
 }
 
-export function NotificationDrawer({ items, onClose, onClearAll, onDismiss, onOpenProject, onOpenNote }: NotificationDrawerProps) {
+export function NotificationDrawer({ items, highlighted, onClose, onClearAll, onDismiss, onOpenProject, onOpenNote }: NotificationDrawerProps) {
   const now = Date.now();
   return (
     <Drawer label="通知" labelledBy="notification-drawer-title" className="w-[min(100vw,26rem)] bg-(--bg)" onClose={onClose}>
@@ -77,6 +79,7 @@ export function NotificationDrawer({ items, onClose, onClearAll, onDismiss, onOp
                     notification={n}
                     variant="drawer"
                     now={now}
+                    highlighted={highlighted.has(n.id)}
                     onDismiss={onDismiss}
                     onOpenProject={onOpenProject}
                     onOpenNote={onOpenNote}

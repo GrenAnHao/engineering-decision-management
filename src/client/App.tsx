@@ -265,6 +265,7 @@ function Shell() {
       {notificationsVisible && (
         <NotificationDrawer
           items={notifications}
+          highlighted={center.highlighted}
           onClose={center.closeDrawer}
           onClearAll={clearNotifications}
           onDismiss={dismissNotification}

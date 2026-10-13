@@ -21,9 +21,9 @@ function notification(body: AppNotification['body'], over: Partial<AppNotificati
   return { id: 'n1', projectId: 'P', projectName: '工程决策中心', projectOrder: 1, at: Date.now(), read: false, body, ...over };
 }
 
-const render = (n: AppNotification, variant: 'toast' | 'drawer') =>
+const render = (n: AppNotification, variant: 'toast' | 'drawer', highlighted = false) =>
   renderToStaticMarkup(
-    <NotificationCard notification={n} variant={variant} onOpenProject={noop} onOpenNote={noop} onDismiss={noop} />,
+    <NotificationCard notification={n} variant={variant} highlighted={highlighted} onOpenProject={noop} onOpenNote={noop} onDismiss={noop} />,
   );
 
 const buttons = (html: string) => html.match(/<button/g)?.length ?? 0;
@@ -50,9 +50,9 @@ test('toast：超过 3 处时只列前 3 处并汇总剩余，带倒计时条', 
   expect(html).toContain('5 处变更 · 刚刚');
 });
 
-test('drawer：超过 3 处时有「展开全部」，未读带「新」，清除按钮', () => {
+test('drawer：超过 3 处时有「展开全部」，高亮时带「新」，清除按钮', () => {
   const changes = [moved, change('added', 'A'), change('added', 'C'), change('modified', 'Y')];
-  const html = render(notification({ type: 'changes', changes }), 'drawer');
+  const html = render(notification({ type: 'changes', changes }), 'drawer', true);
   expect(html).toContain('展开全部 4 处');
   expect(html).toContain('aria-expanded="false"');
   expect(html).toContain('>新<');
@@ -61,7 +61,16 @@ test('drawer：超过 3 处时有「展开全部」，未读带「新」，清�
   expect(controls).toBeTruthy();
   expect(html).toContain(`id="${controls}"`);
   expect(html).toContain('aria-label="清除通知：工程决策中心"');
-  expect(render(notification({ type: 'changes', changes }, { read: true }), 'drawer')).not.toContain('>新<');
+});
+
+test('drawer：「新」只看 highlighted，不看 read', () => {
+  const body = { type: 'recovered' } as const;
+  expect(render(notification(body, { read: true }), 'drawer', true)).toContain('>新<');
+  expect(render(notification(body, { read: false }), 'drawer', true)).toContain('>新<');
+  expect(render(notification(body, { read: false }), 'drawer', false)).not.toContain('>新<');
+  expect(render(notification(body, { read: true }), 'drawer', false)).not.toContain('>新<');
+  // toast 变体不显示「新」
+  expect(render(notification(body), 'toast', true)).not.toContain('>新<');
 });
 
 test('异常与已恢复', () => {
@@ -90,17 +99,30 @@ test('未读角标：0 不显示，超过 99 显示 99+', () => {
 
 test('通知抽屉：模态对话框、标题、条数；为空时禁用全部清除并显示空态', () => {
   const props = { onClose: noop, onClearAll: noop, onDismiss: noop, onOpenProject: noop, onOpenNote: noop };
-  const empty = renderToStaticMarkup(<NotificationDrawer items={[]} {...props} />);
+  const empty = renderToStaticMarkup(<NotificationDrawer items={[]} highlighted={new Set()} {...props} />);
   expect(empty).toContain('role="dialog"');
   expect(empty).toContain('aria-labelledby="notification-drawer-title"');
   expect(empty).toContain('暂无通知');
   expect(empty).toMatch(/<button[^>]*disabled[^>]*>全部清除/);
 
   const items = [notification({ type: 'recovered' }, { id: 'a' }), notification({ type: 'recovered' }, { id: 'b', at: 0 })];
-  const html = renderToStaticMarkup(<NotificationDrawer items={items} {...props} />);
+  const html = renderToStaticMarkup(<NotificationDrawer items={items} highlighted={new Set()} {...props} />);
   expect(html).toContain('2 条');
   expect(html).toContain('今天');
   expect(html).toContain('更早');
+});
+
+test('通知抽屉：只有 highlighted 集合里的卡片显示「新」，与 read 无关', () => {
+  const props = { onClose: noop, onClearAll: noop, onDismiss: noop, onOpenProject: noop, onOpenNote: noop };
+  const items = [
+    notification({ type: 'recovered' }, { id: 'a', projectName: '甲', read: true }),
+    notification({ type: 'recovered' }, { id: 'b', projectName: '乙', read: true }),
+    notification({ type: 'recovered' }, { id: 'c', projectName: '丙', read: false }),
+  ];
+  const html = renderToStaticMarkup(<NotificationDrawer items={items} highlighted={new Set(['a', 'b'])} {...props} />);
+  const cards = html.split('<article').slice(1);
+  expect(cards).toHaveLength(3);
+  expect(cards.map((card) => card.includes('>新<'))).toEqual([true, true, false]);
 });
 
 test('弹出栈：live 区域只放一句摘要，卡片在另一个不带 aria-live 的容器里；最多显示 3 张', () => {

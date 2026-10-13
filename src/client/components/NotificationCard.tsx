@@ -23,6 +23,8 @@ export type NotificationCardProps = {
   paused?: boolean;
   /** 仅 drawer：计算「今天 14:32 / 10月11日 14:32」用的当前时间 */
   now?: number;
+  /** 仅 drawer：是否标「新」。不看 n.read：打开抽屉即标已读，由抽屉按打开时的未读快照传入 */
+  highlighted?: boolean;
 };
 
 function ChangeRow({ change, onOpen }: { change: NoteChange; onOpen: () => void }) {
@@ -66,7 +68,7 @@ function headerMeta(n: AppNotification, variant: NotificationCardProps['variant'
 }
 
 /** 通知卡片：左侧项目色条 + 淡项目色页眉（项目色走 CSS 变量，属于设计规范允许的动态值） */
-export function NotificationCard({ notification: n, variant, onOpenProject, onOpenNote, onDismiss, paused = false, now = Date.now() }: NotificationCardProps) {
+export function NotificationCard({ notification: n, variant, onOpenProject, onOpenNote, onDismiss, paused = false, now = Date.now(), highlighted = false }: NotificationCardProps) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const changes = n.body.type === 'changes' ? n.body.changes : [];
@@ -89,7 +91,7 @@ export function NotificationCard({ notification: n, variant, onOpenProject, onOp
         >
           {n.projectName}
         </button>
-        {variant === 'drawer' && !n.read && <Badge tone="blue">新</Badge>}
+        {variant === 'drawer' && highlighted && <Badge tone="blue">新</Badge>}
         <span className="tabular ml-auto shrink-0 font-mono text-2xs text-fg-subtle">{headerMeta(n, variant, now)}</span>
         <button
           type="button"
