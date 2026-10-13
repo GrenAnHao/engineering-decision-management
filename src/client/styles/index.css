@@ -42,6 +42,8 @@
   --animate-slide-up: slide-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-shimmer: shimmer 1.4s linear infinite;
   --animate-ping-slow: ping-slow 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  /* 通知卡片倒计时条；时长必须与 NotificationStack 的 TOAST_MS 一致 */
+  --animate-toast-timer: toast-timer 6s linear both;
 
   @keyframes fade-in {
     from {
@@ -77,6 +79,11 @@
     }
     to {
       background-position: -200% 0;
+    }
+  }
+  @keyframes toast-timer {
+    to {
+      transform: scaleX(0);
     }
   }
   @keyframes ping-slow {
