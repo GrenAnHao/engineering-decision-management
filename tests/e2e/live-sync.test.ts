@@ -22,10 +22,19 @@ async function openEvents(base: string): Promise<ReadableStreamDefaultReader<Uin
   return reader;
 }
 
+/**
+ * 屏障：等启动时补跑的那次 file 扫描结束再动文件。rescan 按项目串行排队，笔记没变化时提前返回、不广播；
+ * 否则那次扫描可能与测试自己的写入 / rename 交错，读到空文件或新旧两处同时存在的中间态。
+ */
+async function settle(testEnv: TestEnv, projectId: string): Promise<void> {
+  await testEnv.hub.rescan(projectId, 'file');
+}
+
 test('写入笔记 → SSE 收到 project-updated → 条数变化；删除后再次减少', async () => {
   env = await startTestServer((root) => makeProject(root, 'Live', { 'implemented/feature/2026-01-01-a.md': note('a') }));
   const notesRoot = join(env.root, 'Live', '.agents', 'notes');
   const reader = await openEvents(env.base);
+  await settle(env, 'Live');
 
   mkdirSync(join(notesRoot, 'proposed', 'architecture'), { recursive: true });
   writeFileSync(join(notesRoot, 'proposed', 'architecture', '2026-10-12-new.md'), note('新提案', 'proposed'));
@@ -52,6 +61,7 @@ test('写入笔记 → SSE 收到 project-updated → 条数变化；删除后�
 test('文件事件触发的扫描更新 lastChangeAt', async () => {
   env = await startTestServer((root) => makeProject(root, 'Live', { 'implemented/feature/2026-01-01-a.md': note('a') }));
   const reader = await openEvents(env.base);
+  await settle(env, 'Live');
   const before = Date.now();
   writeFileSync(join(env.root, 'Live', '.agents', 'notes', 'implemented', 'feature', '2026-01-01-a.md'), note('a 改'));
   const { data } = await waitForEvent(reader, (event) => event === 'project-updated');
@@ -73,7 +83,7 @@ test('定期重扫扫描根发现新项目并广播 config-changed', async () =>
   const { data } = await waitForEvent(
     reader,
     (event, d) => {
-      if (event === 'project-updated' && (d as ProjectUpdatedEvent).id === 'Second') initial = d as ProjectUpdatedEvent;
+      if (event === 'project-updated' && (d as ProjectUpdatedEvent).id === 'Second') initial ??= d as ProjectUpdatedEvent;
       return event === 'config-changed';
     },
     4000,
@@ -100,7 +110,10 @@ test('notes 目录被删后项目变为失效 + 手动刷新；恢复后的手�
   await fetch(`${env.base}/api/projects/Gone/rescan`, { method: 'POST' });
   const recovered = await waitForEvent(
     reader,
-    (event, data) => event === 'project-updated' && (data as ProjectUpdatedEvent).id === 'Gone',
+    (event, data) =>
+      event === 'project-updated' &&
+      (data as ProjectUpdatedEvent).id === 'Gone' &&
+      (data as ProjectUpdatedEvent).project.watchMode === 'live',
     5000,
   );
   expect((recovered.data as ProjectUpdatedEvent).project).toMatchObject({ healthy: true, watchMode: 'live', count: 1 });
@@ -145,8 +158,7 @@ test('把笔记从 proposed 移到 implemented → changes 里是一条 moved', 
   );
   const notesRoot = join(env.root, 'Move', '.agents', 'notes');
   const reader = await openEvents(env.base);
-  // 等启动时补的那次 file 重扫跑完，否则它可能在 rename 过程中途遍历目录，看到新旧两处同时存在
-  await Bun.sleep(300);
+  await settle(env, 'Move');
   // 笔记的生命周期取自 Status 行（缺省才用目录），真实的迁移是「换目录 + 改 Status」，两步同步完成后才会触发扫描
   const target = join(notesRoot, 'implemented', 'feature', '2026-01-01-a.md');
   renameSync(join(notesRoot, 'proposed', 'feature', '2026-01-01-a.md'), target);
